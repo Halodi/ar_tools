@@ -89,8 +89,10 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
                 marker.pose.pose.orientation.y = ttf_.rotation.y
                 marker.pose.pose.orientation.z = ttf_.rotation.z
                 marker.pose.pose.orientation.w = ttf_.rotation.w
+                markers_msg_.markers.append(marker)
             
-            if len(markers_msg_.markers) is not 0: publisher_.publish(markers_msg_)
+            if len(markers_msg_.markers) is not 0:
+                publisher_.publish(markers_msg_)
                 
     node_.destroy_node()    
     rclpy.shutdown()
