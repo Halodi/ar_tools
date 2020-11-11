@@ -2,6 +2,7 @@ import sys
 import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
+from time import sleep
 
 import rclpy, tf2_ros
 from ar_tools.transforms_math import multiply_transforms
@@ -15,15 +16,19 @@ from std_msgs.msg import Header
 # https://docs.opencv.org/master/d1/dcd/structcv_1_1aruco_1_1DetectorParameters.html
 aruco_parameters = cv2.aruco.DetectorParameters_create()
 # https://docs.opencv.org/master/dc/df7/dictionary_8hpp.html
-aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_7X7_50)
+aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_50)
 
 marker_length_dict = { \
     0: 0.15 \
 }
 
+vis = True
+
+if vis:
+    cv2.namedWindow("aruco")
+    cv2.startWindowThread()
 
 
-marker_quat_flip = Rotation.from_quat([1,0,0,0])
 
 def get_aruco_markers(image_grayscale, K, d):
     corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, aruco_dict, parameters=aruco_parameters)
@@ -45,12 +50,17 @@ def get_aruco_markers(image_grayscale, K, d):
             msg_.pose.pose.position.y = -tvecs_flat_[0]
             msg_.pose.pose.position.z = -tvecs_flat_[1]
              
-            quat_ = (marker_quat_flip * Rotation.from_rotvec(rvecs.ravel())).as_quat()
-            msg_.pose.pose.orientation.x = -quat_[2]
-            msg_.pose.pose.orientation.y = -quat_[0]
-            msg_.pose.pose.orientation.z =  quat_[1]
-            msg_.pose.pose.orientation.w =  quat_[3]
+            eul_ = Rotation.from_rotvec(rvecs.ravel()).as_euler('xyz')
+            rot_adjusted_ = Rotation.from_euler('xyz', [ eul_[2], eul_[0]-np.pi, -eul_[1] ])
+            quat_ = rot_adjusted_.as_quat()
+            msg_.pose.pose.orientation.x = quat_[0]
+            msg_.pose.pose.orientation.y = quat_[1]
+            msg_.pose.pose.orientation.z = quat_[2]
+            msg_.pose.pose.orientation.w = quat_[3]
             msgs_.append(msg_)
+            
+    if vis:
+        cv2.imshow("aruco", image_grayscale)
         
     return msgs_
     
@@ -64,34 +74,38 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
     
     while rclpy.ok():
         img_ = get_grayscale_img_fn()        
-        if img_ is not None:            
-            markers_ = get_aruco_markers(img_, K, d)
-            ts_ = node_.get_clock().now().to_msg()
-            markers_msg_ = ARMarkers(header = Header(stamp=ts_, frame_id=parent_frame_id))
-            wc_tf_ = tf_buffer_.lookup_transform(target_frame=parent_frame_id, source_frame=frame_id, time=Time())
+        if img_ is not None:
+            markers_ = get_aruco_markers(img_, K, d)            
             
-            for marker in markers_:
-                tf_ = TransformStamped(header=Header(stamp=ts_, frame_id=frame_id), child_frame_id=marker.pose.header.frame_id)
-                tf_.transform.translation.x = marker.pose.pose.position.x
-                tf_.transform.translation.y = marker.pose.pose.position.y
-                tf_.transform.translation.z = marker.pose.pose.position.z
-                tf_.transform.rotation.x = marker.pose.pose.orientation.x
-                tf_.transform.rotation.y = marker.pose.pose.orientation.y
-                tf_.transform.rotation.z = marker.pose.pose.orientation.z
-                tf_.transform.rotation.w = marker.pose.pose.orientation.w
-                broadcaster_.sendTransform(tf_)
+            if len(markers_) is not 0:
+                try:
+                    wc_tf_ = tf_buffer_.lookup_transform(target_frame=parent_frame_id, source_frame=frame_id, time=Time())
+                except:
+                    sleep(0.5)
+                    continue
+                    
+                markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=parent_frame_id))         
+                for marker in markers_:
+                    tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=frame_id), child_frame_id=marker.pose.header.frame_id)
+                    tf_.transform.translation.x = marker.pose.pose.position.x
+                    tf_.transform.translation.y = marker.pose.pose.position.y
+                    tf_.transform.translation.z = marker.pose.pose.position.z
+                    tf_.transform.rotation.x = marker.pose.pose.orientation.x
+                    tf_.transform.rotation.y = marker.pose.pose.orientation.y
+                    tf_.transform.rotation.z = marker.pose.pose.orientation.z
+                    tf_.transform.rotation.w = marker.pose.pose.orientation.w
+                    broadcaster_.sendTransform(tf_)
+                    
+                    ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
+                    marker.pose.pose.position.x = ttf_.translation.x
+                    marker.pose.pose.position.y = ttf_.translation.y
+                    marker.pose.pose.position.z = ttf_.translation.z
+                    marker.pose.pose.orientation.x = ttf_.rotation.x
+                    marker.pose.pose.orientation.y = ttf_.rotation.y
+                    marker.pose.pose.orientation.z = ttf_.rotation.z
+                    marker.pose.pose.orientation.w = ttf_.rotation.w
+                    markers_msg_.markers.append(marker)
                 
-                ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
-                marker.pose.pose.position.x = ttf_.translation.x
-                marker.pose.pose.position.y = ttf_.translation.y
-                marker.pose.pose.position.z = ttf_.translation.z
-                marker.pose.pose.orientation.x = ttf_.rotation.x
-                marker.pose.pose.orientation.y = ttf_.rotation.y
-                marker.pose.pose.orientation.z = ttf_.rotation.z
-                marker.pose.pose.orientation.w = ttf_.rotation.w
-                markers_msg_.markers.append(marker)
-            
-            if len(markers_msg_.markers) is not 0:
                 publisher_.publish(markers_msg_)
                 
     node_.destroy_node()    
@@ -114,7 +128,7 @@ def zed(rclpy_args=None):
     if len(sys.argv) > 3:
         address_ = sys.argv[3]
         colon_idx_ = address_.find(':')
-        init_params.set_from_stream(sender_ip=address_[:colon_idx_], port=int(address_[colon_idx_+1:]))
+        init_params.set_from_stream(address_[:colon_idx_], int(address_[colon_idx_+1:]))
 
     zed = sl.Camera()
     err = zed.open(init_params)
