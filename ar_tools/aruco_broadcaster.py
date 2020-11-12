@@ -22,7 +22,7 @@ marker_length_dict = { \
     0: 0.15 \
 }
 
-vis = True
+vis = False
 
 if vis:
     cv2.namedWindow("aruco")
@@ -30,34 +30,35 @@ if vis:
 
 
 
+marker_rot_adj = Rotation.from_rotvec([0, np.pi, 0])
+
 def get_aruco_markers(image_grayscale, K, d):
     corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, aruco_dict, parameters=aruco_parameters)
     msgs_ = []
     for i in range(len(corners)):
-        for j in range(len(ids[i])):
-            id_ = ids[i][j]
-            if id_ not in marker_length_dict: continue
+        id_ = ids[i][0]
+        if id_ not in marker_length_dict: continue
+        
+        msg_ = ARMarker(data="")
+        msg_.pose.header.frame_id = str(id_)
+        for corner in corners[i][0]:
+            msg_.points.append(Point(x=float(corner[0]), y=float(corner[1]), z=0.0))
             
-            msg_ = ARMarker(data="")
-            msg_.pose.header.frame_id = str(id_)
-            for corner in corners[i][j]:
-                msg_.points.append(Point(x=float(corner[0]), y=float(corner[1]), z=0.0))
-                
-            rvecs, tvecs = cv2.aruco.estimatePoseSingleMarkers(corners[i], marker_length_dict[id_], K, d)
-            
-            tvecs_flat_ = tvecs.ravel()
-            msg_.pose.pose.position.x =  tvecs_flat_[2]
-            msg_.pose.pose.position.y = -tvecs_flat_[0]
-            msg_.pose.pose.position.z = -tvecs_flat_[1]
-             
-            eul_ = Rotation.from_rotvec(rvecs.ravel()).as_euler('xyz')
-            rot_adjusted_ = Rotation.from_euler('xyz', [ eul_[2], eul_[0]-np.pi, -eul_[1] ])
-            quat_ = rot_adjusted_.as_quat()
-            msg_.pose.pose.orientation.x = quat_[0]
-            msg_.pose.pose.orientation.y = quat_[1]
-            msg_.pose.pose.orientation.z = quat_[2]
-            msg_.pose.pose.orientation.w = quat_[3]
-            msgs_.append(msg_)
+        rvecs, tvecs = cv2.aruco.estimatePoseSingleMarkers(corners[i], marker_length_dict[id_], K, d)
+        
+        tvecs_flat_ = tvecs.ravel()
+        msg_.pose.pose.position.x =  tvecs_flat_[2]
+        msg_.pose.pose.position.y = -tvecs_flat_[0]
+        msg_.pose.pose.position.z = -tvecs_flat_[1]
+        
+        rvecs_flat_ = rvecs.ravel()
+        rot_ = Rotation.from_rotvec([ rvecs_flat_[2], -rvecs_flat_[0], -rvecs_flat_[1] ]) * marker_rot_adj
+        quat_ = rot_.as_quat()
+        msg_.pose.pose.orientation.x = quat_[0]
+        msg_.pose.pose.orientation.y = quat_[1]
+        msg_.pose.pose.orientation.z = quat_[2]
+        msg_.pose.pose.orientation.w = quat_[3]
+        msgs_.append(msg_)
             
     if vis:
         cv2.imshow("aruco", image_grayscale)
