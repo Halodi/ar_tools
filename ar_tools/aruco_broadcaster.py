@@ -71,21 +71,21 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
     broadcaster_ = tf2_ros.transform_broadcaster.TransformBroadcaster(node_)
     tf_buffer_ = tf2_ros.Buffer()
     listener_ = tf2_ros.TransformListener(tf_buffer_, node_, spin_thread=True)
-    publisher_ = node_.create_publisher(ARMarkers, "/aruco/"+frame_id, 10)
+    #publisher_ = node_.create_publisher(ARMarkers, "/aruco/"+frame_id, 10)
     
     while rclpy.ok():
         img_ = get_grayscale_img_fn()        
         if img_ is not None:
-            markers_ = get_aruco_markers(img_, K, d)            
-            
-            if len(markers_) is not 0:
-                try:
-                    wc_tf_ = tf_buffer_.lookup_transform(target_frame=parent_frame_id, source_frame=frame_id, time=Time())
-                except:
-                    sleep(0.5)
-                    continue
+            try:
+                wc_tf_ = tf_buffer_.lookup_transform(target_frame=parent_frame_id, source_frame=frame_id, time=Time())
+            except:
+                sleep(0.5)
+                continue
                     
-                markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=parent_frame_id))         
+            markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=parent_frame_id))
+        
+            markers_ = get_aruco_markers(img_, K, d)
+            if len(markers_) is not 0:      
                 for marker in markers_:
                     tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=frame_id), child_frame_id=marker.pose.header.frame_id)
                     tf_.transform.translation.x = marker.pose.pose.position.x
@@ -95,7 +95,7 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
                     tf_.transform.rotation.y = marker.pose.pose.orientation.y
                     tf_.transform.rotation.z = marker.pose.pose.orientation.z
                     tf_.transform.rotation.w = marker.pose.pose.orientation.w
-                    broadcaster_.sendTransform(tf_)
+                    #broadcaster_.sendTransform(tf_)
                     
                     ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
                     marker.pose.pose.position.x = ttf_.translation.x
@@ -107,8 +107,8 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
                     marker.pose.pose.orientation.w = ttf_.rotation.w
                     markers_msg_.markers.append(marker)
                 
-                publisher_.publish(markers_msg_)
-                
+            publisher_.publish(markers_msg_)
+            
     node_.destroy_node()    
     rclpy.shutdown()
     
