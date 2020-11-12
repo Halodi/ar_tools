@@ -71,7 +71,7 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
     broadcaster_ = tf2_ros.transform_broadcaster.TransformBroadcaster(node_)
     tf_buffer_ = tf2_ros.Buffer()
     listener_ = tf2_ros.TransformListener(tf_buffer_, node_, spin_thread=True)
-    #publisher_ = node_.create_publisher(ARMarkers, "/aruco/"+frame_id, 10)
+    publisher_ = node_.create_publisher(ARMarkers, "/aruco/"+frame_id, 10)
     
     while rclpy.ok():
         img_ = get_grayscale_img_fn()        
@@ -95,7 +95,7 @@ def run(rclpy_args, get_grayscale_img_fn, K, d, parent_frame_id="map", frame_id=
                     tf_.transform.rotation.y = marker.pose.pose.orientation.y
                     tf_.transform.rotation.z = marker.pose.pose.orientation.z
                     tf_.transform.rotation.w = marker.pose.pose.orientation.w
-                    #broadcaster_.sendTransform(tf_)
+                    broadcaster_.sendTransform(tf_)
                     
                     ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
                     marker.pose.pose.position.x = ttf_.translation.x
