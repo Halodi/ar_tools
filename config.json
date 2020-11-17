@@ -1,0 +1,46 @@
+{
+    "parent_frame": "map",
+    "camera_frame": "camera",
+    
+    "image_scaling": 1.0,
+    "aruco_dict": "4X4_50",
+        
+    "marker_sizes":
+    {
+        "0": 0.15,
+        "3": 0.15
+    },
+    
+    "aruco_params":
+    {
+        "adaptiveThreshConstant": 7.0,
+        "adaptiveThreshWinSizeMax": 23,
+        "adaptiveThreshWinSizeMin": 3,
+        "adaptiveThreshWinSizeStep": 10,
+        "aprilTagCriticalRad": 0.1745329201221466,
+        "aprilTagDeglitch": 0,
+        "aprilTagMaxLineFitMse": 10.0,
+        "aprilTagMaxNmaxima": 10,
+        "aprilTagMinClusterPixels": 5,
+        "aprilTagMinWhiteBlackDiff": 5,
+        "aprilTagQuadDecimate": 0.0,
+        "aprilTagQuadSigma": 0.0,
+        "cornerRefinementMaxIterations": 30,
+        "cornerRefinementMethod": 0,
+        "cornerRefinementMinAccuracy": 0.1,
+        "cornerRefinementWinSize": 5,
+        "detectInvertedMarker": false,
+        "errorCorrectionRate": 0.6,
+        "markerBorderBits": 1,
+        "maxErroneousBitsInBorderRate": 0.35,
+        "maxMarkerPerimeterRate": 4.0,
+        "minCornerDistanceRate": 0.05,
+        "minDistanceToBorder": 3,
+        "minMarkerDistanceRate": 0.05,
+        "minMarkerPerimeterRate": 0.03,
+        "minOtsuStdDev": 5.0,
+        "perspectiveRemoveIgnoredMarginPerCell": 0.13,
+        "perspectiveRemovePixelPerCell": 4,
+        "polygonalApproxAccuracyRate": 0.03
+    }
+}
