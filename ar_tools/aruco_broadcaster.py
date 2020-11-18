@@ -35,7 +35,7 @@ class ArucoBroadcaster:
         
     def run(self):
         aruco_thread_ = Thread(target=self.aruco_loop)
-        aruco_thread_.start()        
+        aruco_thread_.start()
         rclpy.spin(self._node)
         
         self._node.destroy_node()    
@@ -50,7 +50,7 @@ class ArucoBroadcaster:
             img_, img_age_ns_, img_monotonic_stamp_ = self._get_grayscale_img_fn()
             if img_ is not None and self._clock_q.qsize() is not 0:
                 try:
-                    [ clock_, clock_monotonic_stamp_ ] = seek_latest_in_fifo_queue(self._clock_q.get())
+                    [ clock_, clock_monotonic_stamp_ ] = seek_latest_in_fifo_queue(self._clock_q)
                     img_age_ns_ += int((clock_monotonic_stamp_ - img_monotonic_stamp_) * 1e9)
                     clock_time_ = rclpy.time.Time(seconds=clock_.sec, nanoseconds=clock_.nanosec)
                     clock_time_shifted_msg_ = (clock_time_ - rclpy.duration.Duration(nanoseconds=img_age_ns_)).to_msg()
@@ -63,30 +63,28 @@ class ArucoBroadcaster:
                         print(unstamped_lookup_exception)
                         continue
                 
-                markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['parent_frame']))
                 if self._cfg['image_scaling'] != 1.0: img_ = cv2.resize(img_, (0,0), fx=self._cfg['image_scaling'], fy=self._cfg['image_scaling'])
-                markers_ = self.get_aruco_markers(img_)
-                if len(markers_) is not 0:      
-                    for marker in markers_:
-                        tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
-                        tf_.transform.translation.x = marker.pose.pose.position.x
-                        tf_.transform.translation.y = marker.pose.pose.position.y
-                        tf_.transform.translation.z = marker.pose.pose.position.z
-                        tf_.transform.rotation.x = marker.pose.pose.orientation.x
-                        tf_.transform.rotation.y = marker.pose.pose.orientation.y
-                        tf_.transform.rotation.z = marker.pose.pose.orientation.z
-                        tf_.transform.rotation.w = marker.pose.pose.orientation.w
-                        self._broadcaster.sendTransform(tf_)
-                        
-                        ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
-                        marker.pose.pose.position.x = ttf_.translation.x
-                        marker.pose.pose.position.y = ttf_.translation.y
-                        marker.pose.pose.position.z = ttf_.translation.z
-                        marker.pose.pose.orientation.x = ttf_.rotation.x
-                        marker.pose.pose.orientation.y = ttf_.rotation.y
-                        marker.pose.pose.orientation.z = ttf_.rotation.z
-                        marker.pose.pose.orientation.w = ttf_.rotation.w
-                        markers_msg_.markers.append(marker)
+                markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['parent_frame']), markers=self.get_aruco_markers(img_))
+                    
+                for marker in markers_msg_.markers:
+                    tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
+                    tf_.transform.translation.x = marker.pose.pose.position.x
+                    tf_.transform.translation.y = marker.pose.pose.position.y
+                    tf_.transform.translation.z = marker.pose.pose.position.z
+                    tf_.transform.rotation.x = marker.pose.pose.orientation.x
+                    tf_.transform.rotation.y = marker.pose.pose.orientation.y
+                    tf_.transform.rotation.z = marker.pose.pose.orientation.z
+                    tf_.transform.rotation.w = marker.pose.pose.orientation.w
+                    self._broadcaster.sendTransform(tf_)
+                    
+                    ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
+                    marker.pose.pose.position.x = ttf_.translation.x
+                    marker.pose.pose.position.y = ttf_.translation.y
+                    marker.pose.pose.position.z = ttf_.translation.z
+                    marker.pose.pose.orientation.x = ttf_.rotation.x
+                    marker.pose.pose.orientation.y = ttf_.rotation.y
+                    marker.pose.pose.orientation.z = ttf_.rotation.z
+                    marker.pose.pose.orientation.w = ttf_.rotation.w
                     
                 self._publisher.publish(markers_msg_)
                 
@@ -188,6 +186,7 @@ def seek_latest_in_fifo_queue(q):
         _ = q.get()
     
     return q.get()
+    
     
     
 def zed(rclpy_args=None):    
