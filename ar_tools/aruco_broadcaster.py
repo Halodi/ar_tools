@@ -2,7 +2,8 @@ import sys, json
 import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
-from threading import Thread, Condition
+from threading import Thread
+from queue import Queue
 from time import monotonic, sleep
 from os.path import isfile
 
@@ -48,94 +49,84 @@ def get_aruco_markers(image_grayscale, cfg):
 
     return msgs_
     
-def run(rclpy_args, get_grayscale_img_fn, cfg):
-    rclpy.init(args=rclpy_args)
-    global node
-    node = rclpy.create_node("aruco_publisher")
-    broadcaster_ = tf2_ros.transform_broadcaster.TransformBroadcaster(node)
-    tf_buffer_ = tf2_ros.Buffer()
-    listener_ = tf2_ros.TransformListener(tf_buffer_, node)
-    publisher_ = node.create_publisher(ARMarkers, "/aruco/"+cfg['camera_frame'], 10)
-    
-    global clock, clock_monotonic_stamp, want_clock, clock_lock
-    clock = Time()
-    clock_monotonic_stamp = 0.0
-    want_clock = False
-    clock_lock = Condition()
-    
-    def spin_thread():    
-        def clock_callback(msg):
-            global clock, clock_monotonic_stamp, want_clock, clock_lock
-            
-            if not want_clock: return
-            
-            with clock_lock:
-                clock.sec = msg.clock.sec
-                clock.nanosec = msg.clock.nanosec
-                clock_monotonic_stamp = monotonic()
-                want_clock = False
-                clock_lock.notify_all()
-                
-        global node
-        clock_subscriber_ = node.create_subscription(Clock, "/clock", clock_callback, 10)
-        rclpy.spin(node)
+class ArucoBroadcaster:
+    def __init__(self, rclpy_args, get_grayscale_img_fn, cfg):
+        rclpy.init(args=rclpy_args)
+        self._node = rclpy.create_node("aruco_publisher")        
+        self._tf_buffer = tf2_ros.Buffer()
+        self._listener = tf2_ros.TransformListener(self._tf_buffer, self._node)
+        self._broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self._node)
+        self._publisher = self._node.create_publisher(ARMarkers, "/aruco/"+cfg['camera_frame'], 10)
         
-    spin_thread_ = Thread(target=spin_thread)
-    spin_thread_.start()
-    
-    while rclpy.ok():
-        img_, img_age_ns_, image_age_ns_monotonic_stamp_ = get_grayscale_img_fn()
-        if img_ is not None:
-            with clock_lock:
-                want_clock = True
-                while want_clock: clock_lock.wait()
-                clock_s_float_ = clock.sec + clock.nanosec / 1e9
-                timestamp_s_float_ = clock_s_float_ - (img_age_ns_ / 1e9) - (clock_monotonic_stamp - image_age_ns_monotonic_stamp_)
-                timestamp_s_ = int(timestamp_s_float_)                
-                timestamp_ns_ = abs(int((timestamp_s_float_ - timestamp_s_) * 1e9))
-                timestamp_ = Time(sec=timestamp_s_, nanosec=timestamp_ns_)
-                
-            try:
-                wc_tf_ = tf_buffer_.lookup_transform(target_frame=cfg['parent_frame'], source_frame=cfg['camera_frame'], time=timestamp_)                
-            except Exception as stamped_lookup_exception:
-                print(stamped_lookup_exception)
+        self._clock_q = Queue()
+        self._node.create_subscription(Clock, "/clock", self.clock_cb, 10)
+        
+        self._get_grayscale_img_fn = get_grayscale_img_fn
+        self._cfg = cfg
+        
+    def run(self):
+        aruco_thread_ = Thread(target=self.aruco_loop)
+        aruco_thread_.start()        
+        rclpy.spin(self._node)
+        
+        self._node.destroy_node()    
+        rclpy.shutdown()
+        aruco_thread_.join()
+        
+    def clock_cb(self, msg):
+        if self._clock_q.qsize() is 0:
+            self._clock_q.put([ msg.clock, monotonic() ])
+            
+    def aruco_loop(self):
+        while rclpy.ok():
+            img_, img_age_ns_, img_monotonic_stamp_ = self._get_grayscale_img_fn()
+            if img_ is not None and self._clock_q.qsize() is not 0:
                 try:
-                    wc_tf_ = tf_buffer_.lookup_transform(target_frame=cfg['parent_frame'], source_frame=cfg['camera_frame'], time=Time()) 
-                except Exception as unstamped_lookup_exception:
-                    print(unstamped_lookup_exception)
-                    continue
-            
-            markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=cfg['parent_frame']))
-            if cfg['image_scaling'] != 1.0: img_ = cv2.resize(img_, (0,0), fx=cfg['image_scaling'], fy=cfg['image_scaling'])
-            markers_ = get_aruco_markers(img_, cfg)
-            if len(markers_) is not 0:      
-                for marker in markers_:
-                    tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
-                    tf_.transform.translation.x = marker.pose.pose.position.x
-                    tf_.transform.translation.y = marker.pose.pose.position.y
-                    tf_.transform.translation.z = marker.pose.pose.position.z
-                    tf_.transform.rotation.x = marker.pose.pose.orientation.x
-                    tf_.transform.rotation.y = marker.pose.pose.orientation.y
-                    tf_.transform.rotation.z = marker.pose.pose.orientation.z
-                    tf_.transform.rotation.w = marker.pose.pose.orientation.w
-                    broadcaster_.sendTransform(tf_)
-                    
-                    ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
-                    marker.pose.pose.position.x = ttf_.translation.x
-                    marker.pose.pose.position.y = ttf_.translation.y
-                    marker.pose.pose.position.z = ttf_.translation.z
-                    marker.pose.pose.orientation.x = ttf_.rotation.x
-                    marker.pose.pose.orientation.y = ttf_.rotation.y
-                    marker.pose.pose.orientation.z = ttf_.rotation.z
-                    marker.pose.pose.orientation.w = ttf_.rotation.w
-                    markers_msg_.markers.append(marker)
+                    [ clock_, clock_monotonic_stamp_ ] = self._clock_q.get()
+                    img_age_ns_ += int((clock_monotonic_stamp_ - img_monotonic_stamp_) * 1e9)
+                    clock_time_ = rclpy.time.Time(seconds=clock_.sec, nanoseconds=clock_.nanosec)
+                    clock_time_shifted_msg_ = (clock_time_ - rclpy.duration.Duration(nanoseconds=img_age_ns_)).to_msg()
+                    wc_tf_ = self._tf_buffer.lookup_transform(target_frame=self._cfg['parent_frame'], source_frame=self._cfg['camera_frame'], time=clock_time_shifted_msg_)
+                except Exception as stamped_lookup_exception:
+                    print(stamped_lookup_exception)
+                    try:
+                        wc_tf_ = self._tf_buffer.lookup_transform(target_frame=self._cfg['parent_frame'], source_frame=self._cfg['camera_frame'], time=Time()) 
+                    except Exception as unstamped_lookup_exception:
+                        print(unstamped_lookup_exception)
+                        continue
                 
-            publisher_.publish(markers_msg_)
-        
-        else: sleep(0.5)
+                markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['parent_frame']))
+                if self._cfg['image_scaling'] != 1.0: img_ = cv2.resize(img_, (0,0), fx=self._cfg['image_scaling'], fy=self._cfg['image_scaling'])
+                markers_ = get_aruco_markers(img_, self._cfg)
+                if len(markers_) is not 0:      
+                    for marker in markers_:
+                        tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
+                        tf_.transform.translation.x = marker.pose.pose.position.x
+                        tf_.transform.translation.y = marker.pose.pose.position.y
+                        tf_.transform.translation.z = marker.pose.pose.position.z
+                        tf_.transform.rotation.x = marker.pose.pose.orientation.x
+                        tf_.transform.rotation.y = marker.pose.pose.orientation.y
+                        tf_.transform.rotation.z = marker.pose.pose.orientation.z
+                        tf_.transform.rotation.w = marker.pose.pose.orientation.w
+                        self._broadcaster.sendTransform(tf_)
+                        
+                        ttf_ = multiply_transforms(wc_tf_.transform, tf_.transform)
+                        marker.pose.pose.position.x = ttf_.translation.x
+                        marker.pose.pose.position.y = ttf_.translation.y
+                        marker.pose.pose.position.z = ttf_.translation.z
+                        marker.pose.pose.orientation.x = ttf_.rotation.x
+                        marker.pose.pose.orientation.y = ttf_.rotation.y
+                        marker.pose.pose.orientation.z = ttf_.rotation.z
+                        marker.pose.pose.orientation.w = ttf_.rotation.w
+                        markers_msg_.markers.append(marker)
+                    
+                self._publisher.publish(markers_msg_)
+                
+            else:
+                print([ img_ is not None, self._clock_q.qsize() ])
+                sleep(0.5)
+    
 
-    node.destroy_node()    
-    rclpy.shutdown()
     
 def generate_k(cx, cy, fx, fy):
     return np.array([[ fx, 0, cx ], \
@@ -207,8 +198,7 @@ def zed(rclpy_args=None):
         init_params.set_from_stream(address_[:colon_idx_], int(address_[colon_idx_+1:]))
 
     zed = sl.Camera()
-    err = zed.open(init_params)
-    if err != sl.ERROR_CODE.SUCCESS: exit(1)
+    if zed.open(init_params) != sl.ERROR_CODE.SUCCESS: exit(1)
     
     runtime_parameters = sl.RuntimeParameters()
     image = sl.Mat()
@@ -217,16 +207,15 @@ def zed(rclpy_args=None):
             zed.retrieve_image(image, sl.VIEW.LEFT)
             img_grayscale_ = cv2.cvtColor(image.get_data()[:,:,:3], cv2.COLOR_BGR2GRAY)
             age_ns_ = zed.get_timestamp(sl.TIME_REFERENCE.CURRENT).get_nanoseconds() - zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds()
-            monotonic_stamp_ = monotonic()
-            return img_grayscale_, age_ns_, monotonic_stamp_
-        else: return None, 0, 0.0
+            return img_grayscale_, age_ns_, monotonic()
+        else: return None, 0, 0
         
     left_cam_calibration_ = zed.get_camera_information().calibration_parameters.left_cam
     K_ = generate_k(left_cam_calibration_.cx, left_cam_calibration_.cy, left_cam_calibration_.fx, left_cam_calibration_.fy)
     d_ = np.asarray(left_cam_calibration_.disto)
     
     config_ = load_config(sys.argv[1], K_, d_)
-    run(rclpy_args, get_grayscale_img, config_)
+    ArucoBroadcaster(rclpy_args, get_grayscale_img, config_).run()
     
     zed.close()
     
@@ -235,12 +224,9 @@ def grpc(rclpy_args=None):
     from struct import unpack
     from zlib import crc32
     
-    global grpc_img_lock, grpc_thread_continue
-    grpc_img_lock = Condition()
+    global grpc_thread_continue
     grpc_thread_continue = True
-    global grayscale_img_data, grayscale_img_ts, grayscale_img_data_out_
-    grayscale_img_data = None    
-    grayscale_img_ts = 0
+    grayscale_img_queue = Queue()
     grayscale_img_data_out_ = None    
     
     image_channel_ = grpc.insecure_channel(sys.argv[2])
@@ -249,46 +235,41 @@ def grpc(rclpy_args=None):
     common_client_ = ar_tools.Common_pb2_grpc.CommonServerStub(common_channel_)
     empty_ = ar_tools.Common_pb2.Empty()   
     
-    def grpc_grayscale_img_thread(image_client):
-        global grayscale_img_data, grayscale_img_ts, grpc_thread_continue, grpc_img_lock
+    def grpc_grayscale_img_thread(image_client, q):
+        global grpc_thread_continue
         
         stream_ = image_client.stream(empty_)
                          
         while grpc_thread_continue:
-            data_ = next(stream_, None).data                
-            if data_ != None:
+            data_ = next(stream_, None).data
+            if data_ is not None:
                 crc_from_header_ = unpack('I', data_[20:24])[0]                
                 image_data_ = data_[28:]
                 if crc_from_header_ == crc32(image_data_):
-                    with grpc_img_lock:
-                        image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
-                        grayscale_img_data = cv2.imdecode(image_data_np_, cv2.IMREAD_GRAYSCALE)
-                        grayscale_img_ts = unpack('Q', data_[4:12])[0]
-                        grpc_img_lock.notify_all()
+                    image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
+                    grayscale_img_data_ = cv2.imdecode(image_data_np_, cv2.IMREAD_GRAYSCALE)
+                    grayscale_img_ts_ = unpack('Q', data_[4:12])[0]
+                    if q.qsize() is 0: q.put([ grayscale_img_data_, grayscale_img_ts_ ])
         
     def get_grayscale_img():
-        global grayscale_img_data, grayscale_img_ts, grayscale_img_data_out_
-        
-        with grpc_img_lock:
-            grpc_img_lock.wait()
-            grayscale_img_data_out_ = np.copy(grayscale_img_data) if type(grayscale_img_data) is np.ndarray else None
-            before_ = monotonic()
-            grayscale_img_age_ns_ = common_client_.get_timestamp(empty_).stamp - grayscale_img_ts
-            after_ = monotonic()
-            monotonic_stamp_ = (before_ + after_) / 2
-        
-        return grayscale_img_data_out_, grayscale_img_age_ns_, monotonic_stamp_
+        if grayscale_img_queue.qsize() is not 0:
+            [ grayscale_img_data_out_, grayscale_img_ts_ ] = grayscale_img_queue.get()
+            age_monotonic_before_ = monotonic()
+            grayscale_img_age_ns_ = common_client_.get_timestamp(empty_).stamp - grayscale_img_ts_
+            age_monotonic_ = (monotonic() + age_monotonic_before_) / 2        
+            return grayscale_img_data_out_, grayscale_img_age_ns_, age_monotonic_
+        else: return None, 0, 0
     
     metadata_ = image_client_.get_metadata(ar_tools.Common_pb2.Empty())
     K_ = generate_k(metadata_.image_center.x, metadata_.image_center.y, metadata_.focal_length_px.x, metadata_.focal_length_px.y)
     d_ = np.array([ metadata_.k[0], metadata_.k[1], metadata_.p[0], metadata_.p[1] ] + metadata_.k[2:])
     
-    grpc_thread_ = Thread(target=grpc_grayscale_img_thread, args=(image_client_,))
+    grpc_thread_ = Thread(target=grpc_grayscale_img_thread, args=( image_client_, grayscale_img_queue ))
     grpc_thread_.start()
     
     config_ = load_config(sys.argv[1], K_, d_)
-    run(rclpy_args, get_grayscale_img, config_)
+    ArucoBroadcaster(rclpy_args, get_grayscale_img, config_).run()
     
-    continue_grpc_thread_ = False
+    grpc_thread_continue = False
     grpc_thread_.join()
 

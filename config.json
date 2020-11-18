@@ -1,6 +1,6 @@
 {
-    "parent_frame": "map",
-    "camera_frame": "camera",
+    "parent_frame": "World",
+    "camera_frame": "kinect0_color",
     
     "image_scaling": 1.0,
     "aruco_dict": "4X4_50",
