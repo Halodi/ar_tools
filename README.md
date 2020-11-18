@@ -13,6 +13,7 @@ Running these nodes uses a config file; refer to config.json for an example.
 ### config.json
 - parent\_frame: frame to transform markers into
 - camera\_frame: frame that markers are detected in
+- spin\_period: sleep duration between consecutive calls to rclpy.spin_once(...). Too low a period may affect image retrieval
 - image\_scaling: fx, fy of [cv.resize](https://docs.opencv.org/master/da/d54/group__imgproc__transform.html#ga47a974309e9102f5f08231edc7e7529d)
 - aruco\_dict: identifying string that follows OpenCV's pre-defined [dictionaries](https://docs.opencv.org/master/dc/df7/dictionary_8hpp.html), omitting DICT\_
 - marker\_sizes: dictionary of numerical marker IDs to side lengths, used for pose estimation. Markers not defined here are discarded

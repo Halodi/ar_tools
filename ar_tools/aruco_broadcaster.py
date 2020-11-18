@@ -1,5 +1,4 @@
-import sys, json
-import cv2
+import sys, json, cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 from threading import Thread
@@ -8,6 +7,7 @@ from time import monotonic, sleep
 from os.path import isfile
 
 import rclpy, tf2_ros
+from rclpy.qos import *
 from ar_tools.transforms_math import multiply_transforms
 from geometry_msgs.msg import TransformStamped, PoseStamped, Point
 from halodi_msgs.msg import ARMarker, ARMarkers
@@ -20,34 +20,29 @@ from rosgraph_msgs.msg import Clock
 class ArucoBroadcaster:
     def __init__(self, rclpy_args, get_grayscale_img_fn, cfg):
         rclpy.init(args=rclpy_args)
+        
         self._node = rclpy.create_node("aruco_publisher")        
         self._tf_buffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tf_buffer, self._node)
-        self._broadcaster = tf2_ros.transform_broadcaster.TransformBroadcaster(self._node)
-        self._publisher = self._node.create_publisher(ARMarkers, "/aruco/"+cfg['camera_frame'], 10)
+        self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
+        self._publisher = self._node.create_publisher(ARMarkers, "/aruco/"+cfg['camera_frame'], \
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
         
         self._clock_q = Queue()
-        self._node.create_subscription(Clock, "/clock", self.clock_cb, 10)
+        self._node.create_subscription(Clock, "/clock", self.clock_cb, \
+            QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
         
         self._get_grayscale_img_fn = get_grayscale_img_fn
         self._cfg = cfg
-        self._marker_rot_adj = Rotation.from_rotvec([0, np.pi, 0])        
+        self._marker_rot_adj = Rotation.from_rotvec([0, np.pi, 0])     
         
     def run(self):
-        aruco_thread_ = Thread(target=self.aruco_loop)
-        aruco_thread_.start()
-        rclpy.spin(self._node)
-        
-        self._node.destroy_node()    
-        rclpy.shutdown()
-        aruco_thread_.join()
-        
-    def clock_cb(self, msg):
-        self._clock_q.put([ msg.clock, monotonic() ])
-            
-    def aruco_loop(self):
+        spin_thread_ = Thread(target=self.spin_node)
+        spin_thread_.start()
+    
         while rclpy.ok():
-            img_, img_age_ns_, img_monotonic_stamp_ = self._get_grayscale_img_fn()
+            [ img_, img_age_ns_, img_monotonic_stamp_ ] = self._get_grayscale_img_fn()
+
             if img_ is not None and self._clock_q.qsize() is not 0:
                 try:
                     [ clock_, clock_monotonic_stamp_ ] = seek_latest_in_fifo_queue(self._clock_q)
@@ -89,8 +84,19 @@ class ArucoBroadcaster:
                 self._publisher.publish(markers_msg_)
                 
             else:
-                print([ img_ is not None, self._clock_q.qsize() ])
-                sleep(0.5)
+                #print([ img_ is not None, self._clock_q.qsize() ])
+                sleep(self._cfg['spin_period'])
+                
+        self._node.destroy_node()
+        rclpy.shutdown()
+        
+    def clock_cb(self, msg):
+        self._clock_q.put([ msg.clock, monotonic() ])
+        
+    def spin_node(self):
+        while rclpy.ok():
+            rclpy.spin_once(self._node)
+            sleep(self._cfg['spin_period'])
                 
     def get_aruco_markers(self, image_grayscale):
         corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, self._cfg['aruco_dict_'], parameters=self._cfg['aruco_params_'])
@@ -246,7 +252,7 @@ def grpc(rclpy_args=None):
         while grpc_thread_continue:
             data_ = next(stream_, None).data
             if data_ is not None:
-                crc_from_header_ = unpack('I', data_[20:24])[0]                
+                crc_from_header_ = unpack('I', data_[20:24])[0] 
                 image_data_ = data_[28:]
                 if crc_from_header_ == crc32(image_data_):
                     image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
@@ -260,7 +266,9 @@ def grpc(rclpy_args=None):
             age_monotonic_before_ = monotonic()
             grayscale_img_age_ns_ = common_client_.get_timestamp(empty_).stamp - grayscale_img_ts_
             age_monotonic_ = (monotonic() + age_monotonic_before_) / 2
+            
             return grayscale_img_data_out_, grayscale_img_age_ns_, age_monotonic_
+            
         except: return None, 0, 0
     
     metadata_ = image_client_.get_metadata(ar_tools.Common_pb2.Empty())

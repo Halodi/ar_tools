@@ -1,6 +1,7 @@
 {
     "parent_frame": "World",
     "camera_frame": "kinect0_color",
+    "spin_period": 0.05,
     
     "image_scaling": 1.0,
     "aruco_dict": "4X4_50",
