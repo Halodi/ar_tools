@@ -16,38 +16,6 @@ from builtin_interfaces.msg import Time
 from rosgraph_msgs.msg import Clock
 
 
-
-marker_rot_adj = Rotation.from_rotvec([0, np.pi, 0])
-
-def get_aruco_markers(image_grayscale, cfg):
-    corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, cfg['aruco_dict_'], parameters=cfg['aruco_params_'])
-    msgs_ = []
-    for i in range(len(corners)):
-        id_ = str(ids[i][0])
-        if id_ not in cfg['marker_sizes'].keys(): continue
-        
-        msg_ = ARMarker(data="")
-        msg_.pose.header.frame_id = id_
-        for corner in corners[i].reshape([4,2]):
-            msg_.points.append(Point(x=float(corner[0]), y=float(corner[1]), z=0.0))
-            
-        rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], cfg['marker_sizes'][id_], cameraMatrix=cfg['K_'], distCoeffs=cfg['d_'])
-        
-        tvecs_flat_ = tvecs.ravel()
-        msg_.pose.pose.position.x =  tvecs_flat_[2]
-        msg_.pose.pose.position.y = -tvecs_flat_[0]
-        msg_.pose.pose.position.z = -tvecs_flat_[1]
-        
-        rvecs_flat_ = rvecs.ravel()
-        rot_ = Rotation.from_rotvec([ rvecs_flat_[2], -rvecs_flat_[0], -rvecs_flat_[1] ]) * marker_rot_adj
-        quat_ = rot_.as_quat()
-        msg_.pose.pose.orientation.x = quat_[0]
-        msg_.pose.pose.orientation.y = quat_[1]
-        msg_.pose.pose.orientation.z = quat_[2]
-        msg_.pose.pose.orientation.w = quat_[3]
-        msgs_.append(msg_)
-
-    return msgs_
     
 class ArucoBroadcaster:
     def __init__(self, rclpy_args, get_grayscale_img_fn, cfg):
@@ -63,6 +31,7 @@ class ArucoBroadcaster:
         
         self._get_grayscale_img_fn = get_grayscale_img_fn
         self._cfg = cfg
+        self._marker_rot_adj = Rotation.from_rotvec([0, np.pi, 0])        
         
     def run(self):
         aruco_thread_ = Thread(target=self.aruco_loop)
@@ -74,15 +43,14 @@ class ArucoBroadcaster:
         aruco_thread_.join()
         
     def clock_cb(self, msg):
-        if self._clock_q.qsize() is 0:
-            self._clock_q.put([ msg.clock, monotonic() ])
+        self._clock_q.put([ msg.clock, monotonic() ])
             
     def aruco_loop(self):
         while rclpy.ok():
             img_, img_age_ns_, img_monotonic_stamp_ = self._get_grayscale_img_fn()
             if img_ is not None and self._clock_q.qsize() is not 0:
                 try:
-                    [ clock_, clock_monotonic_stamp_ ] = self._clock_q.get()
+                    [ clock_, clock_monotonic_stamp_ ] = seek_latest_in_fifo_queue(self._clock_q.get())
                     img_age_ns_ += int((clock_monotonic_stamp_ - img_monotonic_stamp_) * 1e9)
                     clock_time_ = rclpy.time.Time(seconds=clock_.sec, nanoseconds=clock_.nanosec)
                     clock_time_shifted_msg_ = (clock_time_ - rclpy.duration.Duration(nanoseconds=img_age_ns_)).to_msg()
@@ -97,7 +65,7 @@ class ArucoBroadcaster:
                 
                 markers_msg_ = ARMarkers(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['parent_frame']))
                 if self._cfg['image_scaling'] != 1.0: img_ = cv2.resize(img_, (0,0), fx=self._cfg['image_scaling'], fy=self._cfg['image_scaling'])
-                markers_ = get_aruco_markers(img_, self._cfg)
+                markers_ = self.get_aruco_markers(img_)
                 if len(markers_) is not 0:      
                     for marker in markers_:
                         tf_ = TransformStamped(header=Header(stamp=wc_tf_.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
@@ -125,6 +93,36 @@ class ArucoBroadcaster:
             else:
                 print([ img_ is not None, self._clock_q.qsize() ])
                 sleep(0.5)
+                
+    def get_aruco_markers(self, image_grayscale):
+        corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, self._cfg['aruco_dict_'], parameters=self._cfg['aruco_params_'])
+        msgs_ = []
+        for i in range(len(corners)):
+            id_ = str(ids[i][0])
+            if id_ not in self._cfg['marker_sizes'].keys(): continue
+            
+            msg_ = ARMarker(data="")
+            msg_.pose.header.frame_id = id_
+            for corner in corners[i][0]:
+                msg_.points.append(Point(x=float(corner[0]), y=float(corner[1]), z=0.0))
+                
+            rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], self._cfg['marker_sizes'][id_], cameraMatrix=self._cfg['K_'], distCoeffs=self._cfg['d_'])
+            
+            tvecs_flat_ = tvecs.ravel()
+            msg_.pose.pose.position.x =  tvecs_flat_[2]
+            msg_.pose.pose.position.y = -tvecs_flat_[0]
+            msg_.pose.pose.position.z = -tvecs_flat_[1]
+            
+            rvecs_flat_ = rvecs.ravel()
+            rot_ = Rotation.from_rotvec([ rvecs_flat_[2], -rvecs_flat_[0], -rvecs_flat_[1] ]) * self._marker_rot_adj
+            quat_ = rot_.as_quat()
+            msg_.pose.pose.orientation.x = quat_[0]
+            msg_.pose.pose.orientation.y = quat_[1]
+            msg_.pose.pose.orientation.z = quat_[2]
+            msg_.pose.pose.orientation.w = quat_[3]
+            msgs_.append(msg_)
+
+        return msgs_
     
 
     
@@ -184,6 +182,12 @@ def load_config(fp, K, d):
     config_['aruco_params_'] = load_aruco_params(config_['aruco_params'])
     
     return config_
+    
+def seek_latest_in_fifo_queue(q):
+    for i in range(1, q.qsize()):
+        _ = q.get()
+    
+    return q.get()
     
     
 def zed(rclpy_args=None):    
@@ -249,16 +253,16 @@ def grpc(rclpy_args=None):
                     image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
                     grayscale_img_data_ = cv2.imdecode(image_data_np_, cv2.IMREAD_GRAYSCALE)
                     grayscale_img_ts_ = unpack('Q', data_[4:12])[0]
-                    if q.qsize() is 0: q.put([ grayscale_img_data_, grayscale_img_ts_ ])
+                    q.put([ grayscale_img_data_, grayscale_img_ts_ ])
         
     def get_grayscale_img():
-        if grayscale_img_queue.qsize() is not 0:
-            [ grayscale_img_data_out_, grayscale_img_ts_ ] = grayscale_img_queue.get()
+        try:
+            [ grayscale_img_data_out_, grayscale_img_ts_ ] = seek_latest_in_fifo_queue(grayscale_img_queue)
             age_monotonic_before_ = monotonic()
             grayscale_img_age_ns_ = common_client_.get_timestamp(empty_).stamp - grayscale_img_ts_
-            age_monotonic_ = (monotonic() + age_monotonic_before_) / 2        
+            age_monotonic_ = (monotonic() + age_monotonic_before_) / 2
             return grayscale_img_data_out_, grayscale_img_age_ns_, age_monotonic_
-        else: return None, 0, 0
+        except: return None, 0, 0
     
     metadata_ = image_client_.get_metadata(ar_tools.Common_pb2.Empty())
     K_ = generate_k(metadata_.image_center.x, metadata_.image_center.y, metadata_.focal_length_px.x, metadata_.focal_length_px.y)
