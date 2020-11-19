@@ -37,7 +37,7 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER GRPC\_
 - GRPC\_COMMON\_SERVER: address of a GRPC common server
 
 ## Launch files
-Please fix argument fields, then cd to the package root and run "source install/setup.bash" prior to use.
+Please fix argument fields, then cd to the workspace root and run "source install/setup.bash" prior to use.
 
 - ros2 launch ar\_tools grpc.launch.py: aruco\_grpc + stf\_server
 - ros2 launch ar\_tools zed.launch.py: aruco\_zed + stf\_server
