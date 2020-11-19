@@ -20,10 +20,10 @@ Running aruco\_ nodes uses a config file; refer to config.json for an example.
 
 ## Nodes
 
-### stf_server
+### stf\_server
 ros2 run ar\_tools stf\_server
 
-Used to fetch stamped transforms as other processes, especially the stream reading in aruco\_grpc, make usage of rclpy.spin() difficult. Required by all aruco\_ nodes. Launch file(s) are WIP
+Used to fetch stamped transforms as other processes, especially the stream reading in aruco\_grpc, make usage of rclpy.spin() difficult. Required by all aruco\_ nodes.
 
 ### aruco\_zed
 ros2 run ar\_tools aruco\_zed PATH\_TO\_CONFIG\_FILE STREAMING\_ADDRESS
@@ -36,4 +36,8 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER GRPC\_
 - GRPC\_IMAGE\_SERVER: address of a GRPC image server, e.g. 10.0.0.1:30000. Data structure follows single-image syntax of [azure_grpc](https://github.com/Halodi/azure_grpc)
 - GRPC\_COMMON\_SERVER: address of a GRPC common server
 
+## Launch files
+Please fix argument fields, then cd to the package root and run "source install/setup.bash" prior to use.
 
+- ros2 launch ar\_tools grpc.launch.py: aruco\_grpc + stf\_server
+- ros2 launch ar\_tools zed.launch.py: aruco\zed + stf\_server
