@@ -5,7 +5,7 @@ from rosgraph_msgs.msg import Clock
 from halodi_msgs.srv import GetStampedTF
 
 from threading import Lock
-from time import monotonic
+from time import perf_counter
 
 
 
@@ -31,7 +31,7 @@ class STF_Server(rclpy.node.Node):
     def get_stf_srv(self, request, response):
         with self._lock:            
             try:
-                age_ns_ = int((monotonic() - request.monotonic_stamp) * 1e9)
+                age_ns_ = int((perf_counter() - request.monotonic_stamp) * 1e9)
                 ts_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1]) - Duration(nanoseconds=age_ns_)
                 response.stf = self._tf_buffer.lookup_transform(target_frame=request.parent_frame, source_frame=request.child_frame, time=ts_)
                 response.ok = True

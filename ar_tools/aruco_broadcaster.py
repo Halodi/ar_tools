@@ -1,6 +1,6 @@
 import sys, cv2
 import numpy as np
-from time import monotonic, sleep
+from time import perf_counter, sleep
 
 from ar_tools.ArucoBroadcaster import ArucoBroadcaster, load_config
     
@@ -31,7 +31,7 @@ def zed(rclpy_args=None):
             zed.retrieve_image(image, sl.VIEW.LEFT)
             img_grayscale_ = cv2.cvtColor(image.get_data()[:,:,:3], cv2.COLOR_BGR2GRAY)
             age_ns_ = zed.get_timestamp(sl.TIME_REFERENCE.CURRENT).get_nanoseconds() - zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds()
-            return img_grayscale_, monotonic() - (age_ns_ / 1e9)
+            return img_grayscale_, perf_counter() - (age_ns_ / 1e9)
         else: return None, 0
         
     left_cam_calibration_ = zed.get_camera_information().calibration_parameters.left_cam
@@ -74,11 +74,11 @@ def grpc(rclpy_args=None):
         if pipeA_.poll(grpc_timeout_):
             [ grayscale_img_data_out_, grayscale_img_ts_ ] = pipeA_.recv()            
             try:
-                monotonic_before_ = monotonic()
+                perf_counter_before_ = perf_counter()
                 server_ts_ = common_client_.get_timestamp(empty_, timeout=grpc_timeout_).stamp
                 age_ns_ = server_ts_ - grayscale_img_ts_
-                monotonic_mean_ = (monotonic() + monotonic_before_) / 2
-                return grayscale_img_data_out_, monotonic_mean_ - (age_ns_ / 1e9)
+                perf_counter_mean_ = (perf_counter() + perf_counter_before_) / 2
+                return grayscale_img_data_out_, perf_counter_mean_ - (age_ns_ / 1e9)
             except: print("Unable to get image server timestamp")
         else: print("Unable to get data from gRPC process")
         
@@ -96,7 +96,6 @@ def grpc(rclpy_args=None):
 
         stream_ = image_client_.stream(empty_)
         data_wanted_ = False
-        start_time_ = monotonic()
         while True:
             try:
                 data_ = next(stream_, None).data
