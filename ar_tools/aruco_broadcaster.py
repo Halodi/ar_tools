@@ -1,6 +1,6 @@
 import sys, cv2
 import numpy as np
-from time import monotonic
+from time import monotonic, sleep
 
 from ar_tools.ArucoBroadcaster import ArucoBroadcaster, load_config
     
@@ -49,16 +49,22 @@ def grpc(rclpy_args=None):
     from struct import unpack
     from zlib import crc32
     
-    grpc_timeout_ = 1.0
-    image_channel_ = grpc.insecure_channel(sys.argv[2])
-    image_client_ = ar_tools.Image_pb2_grpc.ImageServerStub(image_channel_)
-    common_channel_ = grpc.insecure_channel(sys.argv[3])
-    common_client_ = ar_tools.Common_pb2_grpc.CommonServerStub(common_channel_)
-    empty_ = ar_tools.Common_pb2.Empty()
+    def wait_for_channel_ready(channel):
+        ready_ = [ False ]
+        
+        def cc_cb(cc):
+            if cc is grpc.ChannelConnectivity.READY:
+                ready_[0] = True
+            
+        channel.subscribe(cc_cb, True)
+        while not ready_[0]: sleep(0.1)
+        channel.unsubscribe(cc_cb)
     
-    metadata_ = image_client_.get_metadata(empty_)
-    K_ = generate_k(metadata_.image_center.x, metadata_.image_center.y, metadata_.focal_length_px.x, metadata_.focal_length_px.y)
-    d_ = np.array([ metadata_.k[0], metadata_.k[1], metadata_.p[0], metadata_.p[1] ] + metadata_.k[2:])
+    grpc_timeout_ = 1.0
+    common_channel_ = grpc.insecure_channel(sys.argv[3])
+    wait_for_channel_ready(common_channel_)
+    common_client_ = ar_tools.Common_pb2_grpc.CommonServerStub(common_channel_)
+    empty_ = ar_tools.Common_pb2.Empty()    
     
     pipeA_, pipeB_ = Pipe()
     
@@ -78,36 +84,51 @@ def grpc(rclpy_args=None):
         
         return None, 0
     
-    def grpc_grayscale_img_thread(image_client, pipe):        
-        stream_ = image_client.stream(empty_)
-        data_wanted_ = False
+    def grpc_grayscale_img_thread(image_server_address, pipe):            
+        image_channel_ = grpc.insecure_channel(image_server_address)
+        wait_for_channel_ready(image_channel_)
+        image_client_ = ar_tools.Image_pb2_grpc.ImageServerStub(image_channel_)
         
+        metadata_ = image_client_.get_metadata(empty_)
+        K_ = generate_k(metadata_.image_center.x, metadata_.image_center.y, metadata_.focal_length_px.x, metadata_.focal_length_px.y)
+        d_ = np.array([ metadata_.k[0], metadata_.k[1], metadata_.p[0], metadata_.p[1] ] + metadata_.k[2:])
+        pipe.send([ K_, d_ ])
+
+        stream_ = image_client_.stream(empty_)
+        data_wanted_ = False
+        start_time_ = monotonic()
         while True:
             try:
                 data_ = next(stream_, None).data
             except:
-                print("Exiting gRPC stream client")
+                print("Hit end of gRPC stream")
                 break
                 
             if pipe.poll():
                 pipe_data_ = pipe.recv()
                 if pipe_data_ is True:
                     data_wanted_ = True
-                else: break
-                
+                else:
+                    print("gRPC stream client got exit request over pipe")
+                    break
+
             if data_wanted_ and data_ is not None:
+                if len(data_) < 24: continue
                 crc_from_header_ = unpack('I', data_[20:24])[0] 
                 image_data_ = data_[28:]
                 if crc_from_header_ == crc32(image_data_):
-                    image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
-                    grayscale_img_data_ = cv2.imdecode(image_data_np_, cv2.IMREAD_GRAYSCALE)
-                    grayscale_img_ts_ = unpack('Q', data_[4:12])[0]
-                    pipe.send([ grayscale_img_data_, grayscale_img_ts_ ])
-                    data_wanted_ = False
+                    try:
+                        image_data_np_ = np.asarray(unpack('%dB'%len(image_data_), image_data_)).astype(np.uint8)
+                        grayscale_img_data_ = cv2.imdecode(image_data_np_, cv2.IMREAD_GRAYSCALE)
+                        grayscale_img_ts_ = unpack('Q', data_[4:12])[0]
+                        pipe.send([ grayscale_img_data_, grayscale_img_ts_ ])
+                        data_wanted_ = False
+                    except: continue
     
-    grpc_stream_recv_ = Process(target=grpc_grayscale_img_thread, args=( image_client_, pipeB_ ))
+    grpc_stream_recv_ = Process(target=grpc_grayscale_img_thread, args=( sys.argv[2], pipeB_ ))
     grpc_stream_recv_.start()
     
+    [ K_, d_ ] = pipeA_.recv()
     config_ = load_config(sys.argv[1], K_, d_)
     ArucoBroadcaster(rclpy_args, get_grayscale_img, config_).run()
     
