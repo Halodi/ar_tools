@@ -113,7 +113,7 @@ def grpc(rclpy_args=None):
                     break
 
             if data_wanted_ and data_ is not None:
-                if len(data) < 28: continue
+                if len(data_) < 28: continue
                 crc_from_header_ = unpack('I', data_[20:24])[0] 
                 image_data_ = data_[28:]
                 if crc_from_header_ == crc32(image_data_):
