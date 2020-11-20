@@ -19,7 +19,7 @@ class STF_Server(rclpy.node.Node):
             static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
             
         self._lock = Lock()
-        self._latest_clock = [ 0, 0 ]    
+        self._latest_clock = [ 0, 0, 0 ]    
         self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
         self._srv = self.create_service(GetStampedTF, 'get_stamped_tf', self.get_stf_srv)
         
@@ -27,11 +27,12 @@ class STF_Server(rclpy.node.Node):
         with self._lock:
             self._latest_clock[0] = msg.clock.sec
             self._latest_clock[1] = msg.clock.nanosec
+            self._latest_clock[2] = perf_counter()
             
     def get_stf_srv(self, request, response):
         with self._lock:            
             try:
-                age_ns_ = int((perf_counter() - request.monotonic_stamp) * 1e9)
+                age_ns_ = int((self._latest_clock[2] - request.monotonic_stamp) * 1e9)
                 ts_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1]) - Duration(nanoseconds=age_ns_)
                 response.stf = self._tf_buffer.lookup_transform(target_frame=request.parent_frame, source_frame=request.child_frame, time=ts_)
                 response.ok = True
