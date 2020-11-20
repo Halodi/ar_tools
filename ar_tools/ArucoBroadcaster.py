@@ -38,25 +38,26 @@ class ArucoBroadcaster:
             [ img_, img_monotonic_stamp_ ] = self._get_grayscale_img_fn()
             
             if img_ is not None:
-                self._stf_req.monotonic_stamp = img_monotonic_stamp_
-                future_ = self._stf_client.call_async(self._stf_req)
-                rclpy.spin_until_future_complete(self._node, future_)
-
                 try:
+                    self._stf_req.monotonic_stamp = img_monotonic_stamp_
+                    future_ = self._stf_client.call_async(self._stf_req)
+                    rclpy.spin_until_future_complete(self._node, future_)
+                
                     res_ = future_.result()
                     if res_.ok:
-                        self.publish_aruco_markers(img_, res_.stf)
+                        self.find_and_publish_aruco_markers(img_, res_.stf)
                     else:
-                        print("Failed to get a valid transform")
+                        self._node.get_logger().error("Received an invalid stamped transform")
                         continue
-                except Exception as e:
-                    print(e)
+                except:
+                    self._node.get_logger().error("Unable to receive a stamped transform")
                     continue
+            else: self._node.get_logger().error("Unable to get image data")
                 
         self._node.destroy_node()
         rclpy.shutdown()
         
-    def publish_aruco_markers(self, image_grayscale, world_to_camera_stf):
+    def find_and_publish_aruco_markers(self, image_grayscale, world_to_camera_stf):
         if self._cfg.image_scaling != 1.0:
             image_grayscale = cv2.resize(image_grayscale, (0,0), fx=self._cfg.image_scaling, fy=self._cfg.image_scaling)
             

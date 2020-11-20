@@ -16,7 +16,7 @@ class STF_Server(rclpy.node.Node):
         self._tf_buffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tf_buffer, self,
             qos = QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT),
-            static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT))
+            static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
             
         self._lock = Lock()
         self._latest_clock = [ 0, 0 ]    
@@ -36,7 +36,7 @@ class STF_Server(rclpy.node.Node):
                 response.stf = self._tf_buffer.lookup_transform(target_frame=request.parent_frame, source_frame=request.child_frame, time=ts_)
                 response.ok = True
             except Exception as e:
-                print(e)    
+                self.get_logger().error(str(e))    
                 response.ok = False
                 
         return response

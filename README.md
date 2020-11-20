@@ -28,7 +28,7 @@ Used to fetch stamped transforms as other processes, especially the stream readi
 ### aruco\_zed
 ros2 run ar\_tools aruco\_zed PATH\_TO\_CONFIG\_FILE STREAMING\_ADDRESS
 
-- STREAMING\_ADDRESS (optional): address of a stream to listen to, e.g. 10.0.0.1:30000
+- STREAMING\_ADDRESS: address of a stream to listen to, e.g. 10.0.0.1:30000. If no colon is detected in this argument, a non-network connection is assumed.
 
 ### aruco\_grpc
 ros2 run ar\_tools aruco\_grpc PATH\_TO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER GRPC\_COMMON\_SERVER 
