@@ -6,12 +6,12 @@
         "static_target_ID": "0",
         
         "static_frame": "World",
-        "camera_frame_parent": "afterJ_neck_y",
-        "camera_name": "kinect0_color",
+        "camera_frame_parent": "afterJ_neck_y",        
         "camera_delay_min": 0.0,
         "camera_delay_max": 0.5,
         
-        "outbound_calibration_topic": "/eve/calibration"
+        "outbound_calibration_topic": "/eve/calibration",
+        "camera_name": "kinect0_color"
     },
     
     "head":

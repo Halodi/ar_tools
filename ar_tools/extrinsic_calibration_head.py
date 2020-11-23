@@ -7,7 +7,7 @@ from halodi_msgs.msg import ExtrinsicCalibrationInfo, RobotJointCalibrationInfo
 from geometry_msgs.msg import TransformStamped, Transform
 
 class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
-    def __init__(config_file):
+    def __init__(self, config_file):
         with open(config_file, 'r') as f:
             config_ = json.load(f)
         
