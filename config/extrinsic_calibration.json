@@ -1,0 +1,20 @@
+{
+    "common":
+    {
+        "data_aggregation_duration": 5.0,
+        "markers_topic": "/aruco/kinect0_color",
+        "static_target_ID": "0",
+        
+        "static_frame": "World",
+        "camera_frame_parent": "afterJ_neck_y",    
+        "camera_delay_min": 0.0,
+        "camera_delay_max": 0.5
+    },
+    
+    "head":
+    {
+        "camera_delay": 0.1,
+        "neck_pitch_offset": 0.0,
+        "neck_to_camera_xyz_ypr": [ 0.1, -0.03, 0.2, 0.0, 0.0, 0.0 ]
+    }
+}

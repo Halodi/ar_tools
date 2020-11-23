@@ -46,6 +46,9 @@ class STF_Server(rclpy.node.Node):
 
 def main(args=None):
     rclpy.init(args=args)
+    
     stfs_ = STF_Server()
     rclpy.spin(stfs_)
+    
+    stfs_.destroy_node()
     rclpy.shutdown()

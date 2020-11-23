@@ -1,13 +1,13 @@
 {
-    "parent_frame": "World",
-    "camera_frame": "kinect0_color",    
+    "parent_frame": "kinect0_color",
+    "camera_frame": "kinect0_color",
+    "broadcast_transforms": false, 
     "image_scaling": 1.0,
-    "aruco_dict": "4X4_50",
-        
+    "aruco_dict": "4X4_50",    
+    
     "marker_sizes":
     {
-        "0": 0.15,
-        "3": 0.15
+        "0": 0.15
     },
     
     "aruco_params":

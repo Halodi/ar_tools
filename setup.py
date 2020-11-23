@@ -26,7 +26,9 @@ setup(
         'console_scripts': [
             'aruco_zed = ar_tools.aruco_broadcaster:zed',
             'aruco_grpc = ar_tools.aruco_broadcaster:grpc',
-            'stf_server = ar_tools.stf_server:main'
+            'stf_server = ar_tools.stf_server:main',
+            'calibration_motion_head = ar_tools.calibration_motions:head',
+            'calibration_extrinsic_head = ar_tools.extrinsic_calibration_head:main'
         ],
     },
 )

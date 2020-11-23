@@ -1,9 +1,9 @@
 import json, cv2
 import numpy as np
-
 from scipy.spatial.transform import Rotation
 from os.path import isfile
 from collections import namedtuple
+from ar_tools.transforms_math import multiply_transforms
 
 import rclpy, tf2_ros
 from rclpy.qos import *
@@ -12,8 +12,6 @@ from halodi_msgs.msg import ARMarker, ARMarkers
 from halodi_msgs.srv import GetStampedTF
 from std_msgs.msg import Header
 from builtin_interfaces.msg import Time as TimeMsg
-
-from ar_tools.transforms_math import multiply_transforms
 
 
 
@@ -30,7 +28,11 @@ class ArucoBroadcaster:
         self._stf_req = GetStampedTF.Request(parent_frame=self._cfg.camera_frame, child_frame=self._cfg.camera_frame)
               
         self._broadcaster = tf2_ros.TransformBroadcaster(self._node, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
-        self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, 10)
+        
+    def __del__(self):
+        self._node.destroy_node()
+        rclpy.shutdown()
         
     def run(self):
         while rclpy.ok():
@@ -83,7 +85,7 @@ class ArucoBroadcaster:
             marker.pose.pose.orientation.z = ttf_.rotation.z
             marker.pose.pose.orientation.w = ttf_.rotation.w
         
-        if len(tfs_) is not 0: self._broadcaster.sendTransform(tfs_)
+        if len(tfs_) is not 0 and self._cfg.broadcast_transforms: self._broadcaster.sendTransform(tfs_)
         self._publisher.publish(markers_msg_)
                 
     def get_aruco_markers(self, image_grayscale):

@@ -8,7 +8,7 @@ def generate_launch_description():
             node_executable='aruco_grpc',
             name='aruco_grpc',
             output='screen',
-            arguments = [ '/home/james/eloquent_ws/src/ar_tools/config.json', '10.4.2.30:11311', '10.4.2.30:11310' ]
+            arguments = [ '/home/james/eloquent_ws/src/ar_tools/config/aruco.json', '10.4.2.30:11311', '10.4.2.30:11310' ]
         ),
         
         Node(
