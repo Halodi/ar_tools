@@ -13,7 +13,7 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         
         super().__init__(config_['common'], x0_)
         
-    def get_camera_frame_adjustment_matrix_fn(x):
+    def get_camera_frame_adjustment_matrix_fn(self, x):
         neck_pitch_matrix_ = np.eye(4)
         neck_pitch_matrix_[:3,:3] = Rotation.from_rotvec([ 0, x[1], 0 ]).as_matrix()
         

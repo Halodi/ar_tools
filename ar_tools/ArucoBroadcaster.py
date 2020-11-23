@@ -8,10 +8,9 @@ from ar_tools.transforms_math import multiply_transforms
 import rclpy, tf2_ros
 from rclpy.qos import *
 from geometry_msgs.msg import TransformStamped, PoseStamped, Point
+from std_msgs.msg import Header
 from halodi_msgs.msg import ARMarker, ARMarkers
 from halodi_msgs.srv import GetStampedTF
-from std_msgs.msg import Header
-from builtin_interfaces.msg import Time as TimeMsg
 
 
 
@@ -29,10 +28,6 @@ class ArucoBroadcaster:
               
         self._broadcaster = tf2_ros.TransformBroadcaster(self._node, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
         self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, 10)
-        
-    def __del__(self):
-        self._node.destroy_node()
-        rclpy.shutdown()
         
     def run(self):
         while rclpy.ok():

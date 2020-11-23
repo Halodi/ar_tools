@@ -48,13 +48,13 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
         self.get_logger().info("Data collection finished (" + str(len(self._ar_msgs)) + " target samples)")
         
-    def get_camera_frame_adjustment_matrix_fn(x):
+    def get_camera_frame_adjustment_matrix_fn(self, x):
         return np.eye(4)
         
-    def clip_camera_delay(x):
+    def clip_camera_delay(self, x):
         return np.clip(x[0], self._cfg['camera_delay_min'], self._cfg['camera_delay_max'])
         
-    def get_camera_delay_duration(x):
+    def get_camera_delay_duration(self, x):
         delay_ = self.clip_camera_delay(x)
         s_ = int(delay_)
         ns_ = int((delay_ - s_) * 1e9)
@@ -75,6 +75,8 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 fixed_frame_target_matrices_[i] = np.matmul(wc_mat_, self._ar_msgs[i][1])
                 I_.append(i)
             except: continue
+            
+        if len(I_) == 0: return np.inf
             
         xvar_ = np.var(fixed_frame_target_matrices_[I_,0,3])
         yvar_ = np.var(fixed_frame_target_matrices_[I_,1,3])
