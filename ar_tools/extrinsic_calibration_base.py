@@ -1,5 +1,5 @@
 import rclpy, tf2_ros
-from halodi_msgs.msg import ARMarkers
+from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 from geometry_msgs.msg import Transform
 
 from time import monotonic
@@ -13,7 +13,8 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
          
         self._cfg = cfg
         self._cfg['x0_'] = x0
-        self.optimization_result = None
+        self._optimization_result = None
+        self._outbound_calibration_msg = None
         
         self._tf_buffer = tf2_ros.Buffer()
         self._listener = tf2_ros.TransformListener(self._tf_buffer, self,
@@ -46,9 +47,19 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         end_time_ = monotonic() + self._cfg['data_aggregation_duration']
         while monotonic() < end_time_: rclpy.spin_once(self)
             
-        self.get_logger().info("Data collection finished (" + str(len(self._ar_msgs)) + " target samples)")
+        self.get_logger().info("Data collection finished with" + str(len(self._ar_msgs)) + " marker samples")
         
-    def get_camera_frame_adjustment_matrix_fn(self, x):
+    def populate_outbound_calibration_msg(self, x):
+        self._outbound_calibration_msg = None
+        
+    def publish_extrinsic_calibration_info(self):
+        if self._outbound_calibration_msg is None: return
+        
+        pub_ = node_.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+        pub_.publish(self._outbound_calibration_msg)
+        
+    def get_camera_frame_adjustment_matrix(self, x):
         return np.eye(4)
         
     def clip_camera_delay(self, x):
@@ -58,11 +69,12 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         delay_ = self.clip_camera_delay(x)
         s_ = int(delay_)
         ns_ = int((delay_ - s_) * 1e9)
-        return Duration(seconds=s_, nanoseconds=ns_)        
+        
+        return Duration(seconds=s_, nanoseconds=ns_)
         
     def static_target_error_fn(self, x):
         camera_delay_ = get_camera_delay_duration(x)
-        camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix_fn(x)        
+        camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
         fixed_frame_target_matrices_ = np.empty([ len(self._ar_msgs), 4, 4 ])
         I_ = []
@@ -86,12 +98,14 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
-        self.optimization_result = minimize(self.static_target_error_fn, self._cfg['x0_'])
+        self._optimization_result = minimize(self.static_target_error_fn, self._cfg['x0_'])
         
-        if self.optimization_result.success: self.get_logger().info("Optimization successful. x: " + str(self.optimization_result.x))
+        if self._optimization_result.success:
+            self._outbound_calibration_msg = self.populate_outbound_calibration_msg(self._optimization_result.x)
+            self.get_logger().info("Optimization successful. x: " + str(self._optimization_result.x))
         else: self.get_logger().error("Optimization failed")
         
-        return self.optimization_result
+        return self._optimization_result.success
     
     def aggregate_data_and_optimize(self):
         self.aggregate_data()
