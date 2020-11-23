@@ -27,7 +27,7 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         
         return np.matmul(neck_pitch_matrix_, neck_camera_matrix_)
         
-    def populate_outbound_calibration_msg(self, x):
+    def get_outbound_calibration_msg(self, x):
         out_ = ExtrinsicCalibrationInfo()
         
         out_.joint_infos.append(RobotJointCalibrationInfo(frame_id=self._cfg['camera_frame_parent'], transmission_ratio=1.0, measurement_offset=x[1]))

@@ -49,16 +49,6 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
         self.get_logger().info("Data collection finished with" + str(len(self._ar_msgs)) + " marker samples")
         
-    def populate_outbound_calibration_msg(self, x):
-        self._outbound_calibration_msg = None
-        
-    def publish_extrinsic_calibration_info(self):
-        if self._outbound_calibration_msg is None: return
-        
-        pub_ = node_.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
-            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
-        pub_.publish(self._outbound_calibration_msg)
-        
     def get_camera_frame_adjustment_matrix(self, x):
         return np.eye(4)
         
@@ -101,7 +91,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._optimization_result = minimize(self.static_target_error_fn, self._cfg['x0_'])
         
         if self._optimization_result.success:
-            self._outbound_calibration_msg = self.populate_outbound_calibration_msg(self._optimization_result.x)
+            self._outbound_calibration_msg = self.get_outbound_calibration_msg(self._optimization_result.x)
             self.get_logger().info("Optimization successful. x: " + str(self._optimization_result.x))
         else: self.get_logger().error("Optimization failed")
         
@@ -110,4 +100,14 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def aggregate_data_and_optimize(self):
         self.aggregate_data()
         return self.optimize()
+        
+    def get_outbound_calibration_msg(self, x):
+        return None
+        
+    def publish_extrinsic_calibration_info(self):
+        if self._outbound_calibration_msg is None: return
+        
+        pub_ = node_.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+        pub_.publish(self._outbound_calibration_msg)
 
