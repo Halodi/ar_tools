@@ -2,6 +2,7 @@
     "common":
     {
         "data_aggregation_duration": 5.0,
+        "data_aggregation_samples_n": 200,
         "markers_topic": "/aruco/kinect0_color",
         "static_target_ID": "0",
         

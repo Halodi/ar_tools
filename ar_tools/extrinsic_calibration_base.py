@@ -46,6 +46,9 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         end_time_ = monotonic() + self._cfg['data_aggregation_duration']
         while monotonic() < end_time_: rclpy.spin_once(self)
+        
+        skip_ = int(len(self._ar_msgs) / self._cfg['data_aggregation_samples_n'])
+        if skip_ > 1: self._ar_msgs = self._ar_msgs[::skip_]
             
         self.get_logger().info("Data collection finished with" + str(len(self._ar_msgs)) + " marker samples")
         
@@ -66,7 +69,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         camera_delay_ = get_camera_delay_duration(x)
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
-        fixed_frame_target_matrices_ = np.empty([ len(self._ar_msgs), 4, 4 ])
+        m_ = np.empty([ len(self._ar_msgs), 6 ])
         I_ = []
         
         for i in range(len(self._ar_msgs)):            
@@ -74,17 +77,14 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 ts_ = self._ar_msgs[i][0] - camera_delay_
                 wc_stf_ = self._tf_buffer.lookup_transform(target_frame=self._cfg['static_frame'], source_frame=self._cfg['camera_frame_parent'], time=ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
-                fixed_frame_target_matrices_[i] = np.matmul(wc_mat_, self._ar_msgs[i][1])
+                wt_mat_ = np.matmul(wc_mat_, self._ar_msgs[i][1])
+                
+                m_[i,:3] = wt_mat_[:3,3]
+                m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)                
                 I_.append(i)
             except: continue
             
-        if len(I_) == 0: return np.inf
-            
-        xvar_ = np.var(fixed_frame_target_matrices_[I_,0,3])
-        yvar_ = np.var(fixed_frame_target_matrices_[I_,1,3])
-        zvar_ = np.var(fixed_frame_target_matrices_[I_,2,3])
-        
-        return xvar_ + yvar_ + zvar_
+        return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else np.inf
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
