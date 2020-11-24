@@ -12,18 +12,15 @@ from time import perf_counter
 class STF_Server(rclpy.node.Node):
     def __init__(self):
         super().__init__('stf_server')
-        
-        self._tf_buffer = tf2_ros.Buffer()
-        self._listener = tf2_ros.TransformListener(self._tf_buffer, self,
-            qos = QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT),
-            static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
             
         self._lock = Lock()
-        
-        self._latest_clock = [ 0, 0, 0 ]    
-        self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
-        
+        self._latest_clock = [ 0, 0, 0 ]
+        self._tf_buffer_core = tf2_ros.BufferCore()
         self._sensor_delay_durations = {}
+          
+        self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self.create_subscription(TFMessage, "/tf", self.tf_cb,
+            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
             QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
             
@@ -35,12 +32,22 @@ class STF_Server(rclpy.node.Node):
             self._latest_clock[1] = msg.clock.nanosec
             self._latest_clock[2] = perf_counter()
             
+    def tf_cb(self, msg):
+        who = 'default_authority'
+        
+        for tf in msg.transforms:
+            self._tf_buffer_core.set_transform(tf, who)
+            
     def tf_static_cb(self, msg):
         with self._lock:
+            who = 'default_authority'
+                    
             for tf in msg.transforms:
                 if tf.header.stamp.sec != 0 or tf.header.stamp.nanosec != 0:
                     dur_ = Duration(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
                     self._sensor_delay_durations[tf.child_frame_id] = dur_
+                    
+                self._tf_buffer_core.set_transform_static(tf, who)
             
     def get_stf_srv(self, request, response):
         with self._lock:            
@@ -51,7 +58,7 @@ class STF_Server(rclpy.node.Node):
                 sensor_delay_ = self._sensor_delay_durations.get(request.child_frame)
                 if sensor_delay_ is not None: ts_ = ts_ - sensor_delay_
                 
-                response.stf = self._tf_buffer.lookup_transform(target_frame=request.parent_frame, source_frame=request.child_frame, time=ts_)
+                response.stf = self._tf_buffer_core.lookup_transform_core(request.parent_frame, request.child_frame, ts_)
                 response.ok = True
             except Exception as e:
                 self.get_logger().error(str(e))    
