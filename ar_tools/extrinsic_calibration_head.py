@@ -3,6 +3,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 from ar_tools.extrinsic_calibration_base import ExtrinsicCalibrationBase
 
+import rclpy
 from halodi_msgs.msg import ExtrinsicCalibrationInfo, RobotJointCalibrationInfo
 from geometry_msgs.msg import TransformStamped, Transform
 
@@ -23,7 +24,7 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         neck_camera_matrix_ = np.empty([4,4])
         neck_camera_matrix_[3,:] = [ 0, 0, 0, 1 ]
         neck_camera_matrix_[:3,3] = x[2:5]
-        neck_camera_matrix_[:3,:3] = Rotation.from_euler('zyx', x[5:8])
+        neck_camera_matrix_[:3,:3] = Rotation.from_euler('zyx', x[5:8]).as_matrix()
         
         return np.matmul(neck_pitch_matrix_, neck_camera_matrix_)
         
@@ -52,8 +53,9 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-    if head_calibrator_.aggregate_data_and_optimize():
-        head_calibrator_.publish_extrinsic_calibration_info()
+    head_calibrator_.aggregate_data_and_optimize()
+    #if head_calibrator_.aggregate_data_and_optimize():
+    #    print("woo")#head_calibrator_.publish_extrinsic_calibration_info()
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()

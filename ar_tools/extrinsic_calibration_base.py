@@ -1,6 +1,8 @@
 import rclpy, tf2_ros
+from rclpy.qos import *
 from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 from geometry_msgs.msg import Transform
+from tf2_msgs.msg import TFMessage
 
 from time import monotonic
 from scipy.optimize import minimize
@@ -16,12 +18,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._optimization_result = None
         self._outbound_calibration_msg = None
         
-        self._tf_buffer = tf2_ros.Buffer()
-        self._listener = tf2_ros.TransformListener(self._tf_buffer, self,
-            qos = QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT),
-            static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
-            
-        self.create_subscription = node.create_subscription(ARMarkers, cfg['markers_topic'], self.ar_cb, 10)
+        self._tf_buffer_core = None 
         self._ar_msgs = []
         
     def ar_cb(self, msg):
@@ -40,17 +37,41 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 
                 self._ar_msgs.append([ ts_, transform_to_matrix(tf_) ])
                 break
+
+    def tf_cb(self, msg):
+        who = 'default_authority'
+        for tf in msg.transforms:
+           self._tf_buffer_core.set_transform(tf, who)
+
+    def tf_static_cb(self, msg):
+        who = 'default_authority'
+        for tf in msg.transforms:
+            self._tf_buffer_core.set_transform_static(tf, who)
         
     def aggregate_data(self):
-        self.get_logger().info("Collecting data for " + str(self._cfg['data_aggregation_duration']) + " seconds ...")
-        
+        self._tf_buffer_core = tf2_ros.BufferCore(Duration(seconds=600))
+        tf_sub_ = self.create_subscription(TFMessage, "/tf", self.tf_cb,
+            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT))
+        tf_static_sub_ = self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+
+        self.get_logger().info("Firstly subscribing to TF for " + str(self._cfg['tf_listener_warmup_duration']) + " seconds ...")
+        end_time_ = monotonic() + self._cfg['tf_listener_warmup_duration']
+        while monotonic() < end_time_: rclpy.spin_once(self)
+
+        ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.ar_cb, 10)
+        self.get_logger().info("Subscribing to TF and marker data for " + str(self._cfg['data_aggregation_duration']) + " seconds ...")
         end_time_ = monotonic() + self._cfg['data_aggregation_duration']
         while monotonic() < end_time_: rclpy.spin_once(self)
+
+        self.destroy_subscription(tf_sub_)
+        self.destroy_subscription(tf_static_sub_)
+        self.destroy_subscription(ar_sub_)
         
         skip_ = int(len(self._ar_msgs) / self._cfg['data_aggregation_samples_n'])
         if skip_ > 1: self._ar_msgs = self._ar_msgs[::skip_]
             
-        self.get_logger().info("Data collection finished with" + str(len(self._ar_msgs)) + " marker samples")
+        self.get_logger().info("Data aggregation finished with " + str(len(self._ar_msgs)) + " marker samples")
         
     def get_camera_frame_adjustment_matrix(self, x):
         return np.eye(4)
@@ -66,25 +87,27 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         return Duration(seconds=s_, nanoseconds=ns_)
         
     def static_target_error_fn(self, x):
-        camera_delay_ = get_camera_delay_duration(x)
+        camera_delay_ = self.get_camera_delay_duration(x)
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
         m_ = np.empty([ len(self._ar_msgs), 6 ])
         I_ = []
         
-        for i in range(len(self._ar_msgs)):            
+        for i in range(len(self._ar_msgs)):
             try:
                 ts_ = self._ar_msgs[i][0] - camera_delay_
-                wc_stf_ = self._tf_buffer.lookup_transform(target_frame=self._cfg['static_frame'], source_frame=self._cfg['camera_frame_parent'], time=ts_)
+                wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
                 wt_mat_ = np.matmul(wc_mat_, self._ar_msgs[i][1])
                 
                 m_[i,:3] = wt_mat_[:3,3]
                 m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)                
                 I_.append(i)
-            except: continue
+            except Exception as e:
+                print(str(e))
+                continue
             
-        return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else np.inf
+        return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else 1e9
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
