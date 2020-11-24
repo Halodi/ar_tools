@@ -42,9 +42,12 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         ctf_.rotation.y = quat_[1]
         ctf_.rotation.z = quat_[2]
         ctf_.rotation.w = quat_[3]
-        
+
         sctf_ = TransformStamped(child_frame_id=self._cfg['camera_name'], transform=ctf_)
         sctf_.header.frame_id = self._cfg['camera_frame_parent']
+        cam_delay_dur_ = self.get_camera_delay_duration(x)
+        sctf_.header.stamp.sec = cam_delay_dur_.seconds
+        sctf_.header.stamp.nanosec = cam_delay_dur_.nanoseconds
         out_.sensor_transforms.append(sctf_)
         
         return out_
@@ -53,9 +56,8 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-    head_calibrator_.aggregate_data_and_optimize()
-    #if head_calibrator_.aggregate_data_and_optimize():
-    #    print("woo")#head_calibrator_.publish_extrinsic_calibration_info()
+    if head_calibrator_.aggregate_data_and_optimize():
+        head_calibrator_.publish_extrinsic_calibration_info()
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()
