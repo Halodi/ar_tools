@@ -130,7 +130,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def publish_extrinsic_calibration_info(self):
         if self._outbound_calibration_msg is None: return
         
-        pub_ = node_.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
+        pub_ = self.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
         pub_.publish(self._outbound_calibration_msg)
 
