@@ -1,6 +1,6 @@
 import rclpy, tf2_ros
 from rclpy.qos import *
-from geometry_msgs.msg import TransformStamped
+from tf2_msgs.msg import TFMessage
 from rosgraph_msgs.msg import Clock
 from halodi_msgs.srv import GetStampedTF
 
@@ -19,8 +19,14 @@ class STF_Server(rclpy.node.Node):
             static_qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
             
         self._lock = Lock()
+        
         self._latest_clock = [ 0, 0, 0 ]    
         self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        
+        self._sensor_delay_durations = {}
+        self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+            
         self._srv = self.create_service(GetStampedTF, 'get_stamped_tf', self.get_stf_srv)
         
     def clock_cb(self, msg):
@@ -29,11 +35,22 @@ class STF_Server(rclpy.node.Node):
             self._latest_clock[1] = msg.clock.nanosec
             self._latest_clock[2] = perf_counter()
             
+    def tf_static_cb(self, msg):
+        with self._lock:
+            for tf in msg.transforms:
+                if tf.header.stamp.sec != 0 or tf.header.stamp.nanosec != 0:
+                    dur_ = Duration(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
+                    self._sensor_delay_durations[tf.child_frame_id] = dur_
+            
     def get_stf_srv(self, request, response):
         with self._lock:            
             try:
                 age_ns_ = int((self._latest_clock[2] - request.monotonic_stamp) * 1e9)
                 ts_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1]) - Duration(nanoseconds=age_ns_)
+                
+                sensor_delay_ = self._sensor_delay_durations.get(request.child_frame)
+                if sensor_delay_ is not None: ts_ = ts_ - sensor_delay_
+                
                 response.stf = self._tf_buffer.lookup_transform(target_frame=request.parent_frame, source_frame=request.child_frame, time=ts_)
                 response.ok = True
             except Exception as e:
