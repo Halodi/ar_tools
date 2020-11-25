@@ -42,7 +42,7 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_ARUCO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER
 - GRPC\_COMMON\_SERVER: address of a GRPC common server
 
 ## Extrinsic calibration nodes
-Running calibration\_extrinsic\_ nodes requires a config file; refer to config/extrinsic\_calibration.json for an example. Requires a marker fixed in space e.g. on a wall, visible to the robot across a reasonable range of motion. Robot is assumed to be moving while data is being collected, e.g. through a calibration\_motion\_ node.
+Running calibration\_extrinsic\_ nodes requires a config file; refer to config/extrinsic\_calibration.json for an example. Requires a marker fixed in space e.g. on a wall, visible to the robot across a reasonable range of motion with a streaming node already running, e.g. aruco\_zed. Robot is assumed to be moving while data is being collected, e.g. through a calibration\_motion\_ node.
 Note that the first element of the parameter vector to be optimized is assumed to be the camera delay.
 
 #### extrinsic\_calibration.json
@@ -66,10 +66,12 @@ Note that the first element of the parameter vector to be optimized is assumed t
 ### calibration\_extrinsic\_head
 ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE
 
+For calibrating a camera mounted in or on the head (only movement relative to the robot is through the neck joint).
+
 ### calibration\_motion\_head
 ros2 run ar\_tools calibration\_motion\_head
 
-Runs a looping routine that pivots the neck and pelvis.
+Runs a looping routine that moves the neck and pelvis.
 
 ## Launch files
 Please adjust arguments in relevant launch/config files, then cd to the workspace root and run "source install/setup.bash" prior to use.
