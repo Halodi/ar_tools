@@ -43,6 +43,7 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_ARUCO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER
 
 ## Extrinsic calibration nodes
 Running calibration\_extrinsic\_ nodes requires a config file; refer to config/extrinsic\_calibration.json for an example. Requires a marker fixed in space e.g. on a wall, visible to the robot across a reasonable range of motion. Robot is assumed to be moving while data is being collected, e.g. through a calibration\_motion\_ node.
+Note that the first element of the parameter vector to be optimized is assumed to be the camera delay.
 
 #### extrinsic\_calibration.json
 - common: contains parameters used by all extrinsic calibration nodes

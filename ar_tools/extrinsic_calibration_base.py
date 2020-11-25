@@ -83,13 +83,10 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         return np.eye(4)
         
     def get_camera_frame_adjustment_matrix(self, x):
-        return np.eye(4)
-        
-    def clip_camera_delay(self, x):
-        return np.clip(x[0], self._cfg['camera_delay_min'], self._cfg['camera_delay_max'])
+        return self.get_static_transform_matrix(x)
         
     def get_camera_delay_duration(self, x):
-        delay_ = self.clip_camera_delay(x)
+        delay_ = np.clip(x[0], self._cfg['camera_delay_min'], self._cfg['camera_delay_max'])
         s_ = int(delay_)
         ns_ = int((delay_ - s_) * 1e9)
         
