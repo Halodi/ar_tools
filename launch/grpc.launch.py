@@ -15,6 +15,7 @@ def generate_launch_description():
             package='ar_tools',
             node_executable='stf_server',
             name='stf_server',
-            output='screen'
+            output='screen',
+            arguments = [ '100' ]
         )
     ])

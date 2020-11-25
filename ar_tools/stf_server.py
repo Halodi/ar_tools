@@ -1,11 +1,13 @@
+import sys
+from threading import Lock
+from time import perf_counter
+from ar_tools.throttle import Throttle
+
 import rclpy, tf2_ros
 from rclpy.qos import *
 from tf2_msgs.msg import TFMessage
 from rosgraph_msgs.msg import Clock
 from halodi_msgs.srv import GetStampedTF
-
-from threading import Lock
-from time import perf_counter
 
 
 
@@ -72,7 +74,11 @@ def main(args=None):
     rclpy.init(args=args)
     
     stfs_ = STF_Server()
-    rclpy.spin(stfs_)
+    
+    throttle_ = Throttle(int(sys.argv[1]))
+    while rclpy.ok():
+        rclpy.spin_once(stfs_)
+        throttle_.wait()
     
     stfs_.destroy_node()
     rclpy.shutdown()
