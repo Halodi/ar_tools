@@ -72,7 +72,8 @@ ros2 run ar\_tools calibration\_motion\_head
 Runs a looping routine that pivots the neck and pelvis.
 
 ## Launch files
-Please fix argument fields, then cd to the workspace root and run "source install/setup.bash" prior to use.
+Please adjust arguments in relevant launch/config files, then cd to the workspace root and run "source install/setup.bash" prior to use.
 
 - ros2 launch ar\_tools grpc.launch.py: aruco\_grpc + stf\_server
 - ros2 launch ar\_tools zed.launch.py: aruco\_zed + stf\_server
+- ros2 launch ar\_tools extrinsic\_calibration\_head.launch.py: calibration\_motion\_head + calibration\_extrinsic\_head (required)

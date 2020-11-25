@@ -117,10 +117,11 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
-        self._optimization_result = minimize(self.static_target_error_fn, self._cfg['x0_'])
+        res_ = minimize(self.static_target_error_fn, self._cfg['x0_'])
         
-        if self._optimization_result.success:
-            self.get_logger().info("Optimization successful. x: " + str(self._optimization_result.x))
+        if res_.success:
+            self._optimization_result = res_
+            self.get_logger().info("Optimization successful. x: " + str(res_.x))
             return True            
         else:
             self.get_logger().error("Optimization failed")
@@ -130,9 +131,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self.aggregate_data()
         return self.optimize()
         
-    def get_outbound_calibration_msg(self, x):
-        out_ = ExtrinsicCalibrationInfo()
-        
+    def get_extrinsic_calibration_info_msg(self, x):
         tf_ = matrix_to_transform(self.get_static_transform_matrix(x))        
         stf_ = TransformStamped(child_frame_id=self._cfg['camera_name'], transform=tf_)
         stf_.header.frame_id = self._cfg['camera_frame_parent']
@@ -140,15 +139,16 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         cam_delay_dur_ = self.get_camera_delay_duration(x).to_msg()
         stf_.header.stamp.sec = cam_delay_dur_.sec
         stf_.header.stamp.nanosec = cam_delay_dur_.nanosec
-            
+        
+        out_ = ExtrinsicCalibrationInfo()
         out_.sensor_transforms.append(stf_)
         
-        return out_        
+        return out_
         
     def publish_extrinsic_calibration_info(self):
         if self._optimization_result is None: return
         
         pub_ = self.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
-        pub_.publish(self.get_outbound_calibration_msg(self._optimization_result.x))
+        pub_.publish(self.get_extrinsic_calibration_info_msg(self._optimization_result.x))
 

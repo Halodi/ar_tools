@@ -30,8 +30,8 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         
         return np.matmul(head_pitch_matrix_, self.get_static_transform_matrix(x))        
         
-    def get_outbound_calibration_msg(self, x):
-        out_ = super().get_outbound_calibration_msg(x)
+    def get_extrinsic_calibration_info_msg(self, x):
+        out_ = super().get_extrinsic_calibration_info_msg(x)
         
         parent_frame_id_ = out_.sensor_transforms[0].header.frame_id
         out_.joint_infos.append(RobotJointCalibrationInfo(frame_id=parent_frame_id_, transmission_ratio=1.0, measurement_offset=x[1]))
