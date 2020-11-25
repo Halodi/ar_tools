@@ -17,7 +17,6 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._cfg = cfg
         self._cfg['x0_'] = x0
         self._optimization_result = None
-        self._outbound_calibration_msg = None
         
         self._tf_buffer_core = None 
         self._ar_msgs = []
@@ -125,10 +124,10 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         if self._optimization_result.success:
             self.get_logger().info("Optimization successful. x: " + str(self._optimization_result.x))
-            self._outbound_calibration_msg = self.get_outbound_calibration_msg(self._optimization_result.x)
-        else: self.get_logger().error("Optimization failed")
-        
-        return self._optimization_result.success
+            return True            
+        else:
+            self.get_logger().error("Optimization failed")
+            return False
     
     def aggregate_data_and_optimize(self):
         self.aggregate_data()
@@ -150,9 +149,9 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         return out_        
         
     def publish_extrinsic_calibration_info(self):
-        if self._outbound_calibration_msg is None: return
+        if self._optimization_result is None: return
         
         pub_ = self.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
-        pub_.publish(self._outbound_calibration_msg)
+        pub_.publish(self.get_outbound_calibration_msg(self._optimization_result.x))
 
