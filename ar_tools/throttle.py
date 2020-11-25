@@ -9,7 +9,7 @@ class Throttle:
         elapsed_ = perf_counter() - self._last_proc
         if elapsed_ < self._period:
             sleep(self._period - elapsed_)
-            self._last_proc = perf_counter()
+        self._last_proc = perf_counter()
             
     def poll(self):
         now_ = perf_counter()
