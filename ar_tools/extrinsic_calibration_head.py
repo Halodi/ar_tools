@@ -4,51 +4,38 @@ from scipy.spatial.transform import Rotation
 from ar_tools.extrinsic_calibration_base import ExtrinsicCalibrationBase
 
 import rclpy
-from halodi_msgs.msg import ExtrinsicCalibrationInfo, RobotJointCalibrationInfo
-from geometry_msgs.msg import TransformStamped, Transform
+from halodi_msgs.msg import RobotJointCalibrationInfo
+from geometry_msgs.msg import Transform
 
 class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
     def __init__(self, config_file):
         with open(config_file, 'r') as f:
             config_ = json.load(f)
         
-        x0_ = [ config_['head']['camera_delay'], config_['head']['neck_pitch_offset'] ]
-        x0_.extend(config_['head']['neck_to_camera_xyz_ypr'])
+        x0_ = [ config_['head']['camera_delay'], config_['head']['pitch_offset'] ]
+        x0_.extend(config_['head']['head_to_camera_xyz_ypr'])
         
         super().__init__(config_['common'], x0_)
         
+    def get_static_transform_matrix(self, x):
+        head_camera_matrix_ = np.empty([4,4])
+        head_camera_matrix_[3,:] = [ 0, 0, 0, 1 ]
+        head_camera_matrix_[:3,3] = x[2:5]
+        head_camera_matrix_[:3,:3] = Rotation.from_euler('zyx', x[5:8]).as_matrix()
+        
+        return head_camera_matrix_
+        
     def get_camera_frame_adjustment_matrix(self, x):
-        neck_pitch_matrix_ = np.eye(4)
-        neck_pitch_matrix_[:3,:3] = Rotation.from_rotvec([ 0, x[1], 0 ]).as_matrix()
+        head_pitch_matrix_ = np.eye(4)
+        head_pitch_matrix_[:3,:3] = Rotation.from_rotvec([ 0, x[1], 0 ]).as_matrix()
         
-        neck_camera_matrix_ = np.empty([4,4])
-        neck_camera_matrix_[3,:] = [ 0, 0, 0, 1 ]
-        neck_camera_matrix_[:3,3] = x[2:5]
-        neck_camera_matrix_[:3,:3] = Rotation.from_euler('zyx', x[5:8]).as_matrix()
-        
-        return np.matmul(neck_pitch_matrix_, neck_camera_matrix_)
+        return np.matmul(head_pitch_matrix_, self.get_static_transform_matrix(x))        
         
     def get_outbound_calibration_msg(self, x):
-        out_ = ExtrinsicCalibrationInfo()
+        out_ = super().get_outbound_calibration_msg(x)
         
-        out_.joint_infos.append(RobotJointCalibrationInfo(frame_id=self._cfg['camera_frame_parent'], transmission_ratio=1.0, measurement_offset=x[1]))
-        
-        ctf_ = Transform()
-        ctf_.translation.x = x[2]
-        ctf_.translation.y = x[3]
-        ctf_.translation.z = x[4]
-        quat_ = Rotation.from_euler('zyx', x[5:8]).as_quat()
-        ctf_.rotation.x = quat_[0]
-        ctf_.rotation.y = quat_[1]
-        ctf_.rotation.z = quat_[2]
-        ctf_.rotation.w = quat_[3]
-
-        sctf_ = TransformStamped(child_frame_id=self._cfg['camera_name'], transform=ctf_)
-        sctf_.header.frame_id = self._cfg['camera_frame_parent']
-        cam_delay_dur_ = self.get_camera_delay_duration(x).to_msg()
-        sctf_.header.stamp.sec = cam_delay_dur_.sec
-        sctf_.header.stamp.nanosec = cam_delay_dur_.nanosec
-        out_.sensor_transforms.append(sctf_)
+        parent_frame_id_ = out_.sensor_transforms[0].header.frame_id
+        out_.joint_infos.append(RobotJointCalibrationInfo(frame_id=parent_frame_id_, transmission_ratio=1.0, measurement_offset=x[1]))
         
         return out_
         
@@ -57,8 +44,7 @@ def main(args=None):
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
     if head_calibrator_.aggregate_data_and_optimize():
-        print("ohai")
-        #head_calibrator_.publish_extrinsic_calibration_info()
+        head_calibrator_.publish_extrinsic_calibration_info()
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()

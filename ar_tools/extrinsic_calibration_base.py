@@ -1,13 +1,13 @@
 import rclpy, tf2_ros
 from rclpy.qos import *
 from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
-from geometry_msgs.msg import Transform
+from geometry_msgs.msg import Transform, TransformStamped
 from tf2_msgs.msg import TFMessage
 
 from time import monotonic
 from scipy.optimize import minimize
 import numpy as np
-from ar_tools.transforms_math import transform_to_matrix
+from ar_tools.transforms_math import *
 from ar_tools.throttle import Throttle
 
 class ExtrinsicCalibrationBase(rclpy.node.Node):
@@ -80,6 +80,9 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
         self.get_logger().info("Data aggregation finished with " + str(len(self._ar_msgs)) + " marker samples")
         
+    def get_static_transform_matrix(self, x):
+        return np.eye(4)
+        
     def get_camera_frame_adjustment_matrix(self, x):
         return np.eye(4)
         
@@ -132,7 +135,19 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         return self.optimize()
         
     def get_outbound_calibration_msg(self, x):
-        return None
+        out_ = ExtrinsicCalibrationInfo()
+        
+        tf_ = matrix_to_transform(self.get_static_transform_matrix(x))        
+        stf_ = TransformStamped(child_frame_id=self._cfg['camera_name'], transform=tf_)
+        stf_.header.frame_id = self._cfg['camera_frame_parent']
+
+        cam_delay_dur_ = self.get_camera_delay_duration(x).to_msg()
+        stf_.header.stamp.sec = cam_delay_dur_.sec
+        stf_.header.stamp.nanosec = cam_delay_dur_.nanosec
+            
+        out_.sensor_transforms.append(stf_)
+        
+        return out_        
         
     def publish_extrinsic_calibration_info(self):
         if self._outbound_calibration_msg is None: return
