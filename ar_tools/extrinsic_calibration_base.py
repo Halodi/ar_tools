@@ -8,6 +8,7 @@ from time import monotonic
 from scipy.optimize import minimize
 import numpy as np
 from ar_tools.transforms_math import transform_to_matrix
+from ar_tools.throttle import Throttle
 
 class ExtrinsicCalibrationBase(rclpy.node.Node):
     def __init__(self, cfg, x0):
@@ -55,14 +56,20 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         tf_static_sub_ = self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
             QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
 
+        throttle_ = Throttle(self._cfg['data_aggregation_frequency'])
+
         self.get_logger().info("Firstly subscribing to TF for " + str(self._cfg['tf_listener_warmup_duration']) + " seconds ...")
         end_time_ = monotonic() + self._cfg['tf_listener_warmup_duration']
-        while monotonic() < end_time_: rclpy.spin_once(self)
+        while monotonic() < end_time_:
+            rclpy.spin_once(self)
+            throttle_.wait()
 
         ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.ar_cb, 10)
         self.get_logger().info("Subscribing to TF and marker data for " + str(self._cfg['data_aggregation_duration']) + " seconds ...")
         end_time_ = monotonic() + self._cfg['data_aggregation_duration']
-        while monotonic() < end_time_: rclpy.spin_once(self)
+        while monotonic() < end_time_:
+            rclpy.spin_once(self)
+            throttle_.wait()
 
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
@@ -106,7 +113,6 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             except Exception as e:
                 #print(str(e))
                 continue
-        print(len(I_))
 
         return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else 1e9
             
