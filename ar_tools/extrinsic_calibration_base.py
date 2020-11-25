@@ -101,12 +101,13 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 wt_mat_ = np.matmul(wc_mat_, self._ar_msgs[i][1])
                 
                 m_[i,:3] = wt_mat_[:3,3]
-                m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)                
+                m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)
                 I_.append(i)
             except Exception as e:
-                print(str(e))
+                #print(str(e))
                 continue
-            
+        print(len(I_))
+
         return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else 1e9
             
     def optimize(self):
@@ -114,8 +115,8 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._optimization_result = minimize(self.static_target_error_fn, self._cfg['x0_'])
         
         if self._optimization_result.success:
-            self._outbound_calibration_msg = self.get_outbound_calibration_msg(self._optimization_result.x)
             self.get_logger().info("Optimization successful. x: " + str(self._optimization_result.x))
+            self._outbound_calibration_msg = self.get_outbound_calibration_msg(self._optimization_result.x)
         else: self.get_logger().error("Optimization failed")
         
         return self._optimization_result.success

@@ -34,9 +34,9 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         out_.joint_infos.append(RobotJointCalibrationInfo(frame_id=self._cfg['camera_frame_parent'], transmission_ratio=1.0, measurement_offset=x[1]))
         
         ctf_ = Transform()
-        ctf_.transform.translation.x = x[2]
-        ctf_.transform.translation.y = x[3]
-        ctf_.transform.translation.z = x[4]
+        ctf_.translation.x = x[2]
+        ctf_.translation.y = x[3]
+        ctf_.translation.z = x[4]
         quat_ = Rotation.from_euler('zyx', x[5:8]).as_quat()
         ctf_.rotation.x = quat_[0]
         ctf_.rotation.y = quat_[1]
@@ -45,9 +45,9 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
 
         sctf_ = TransformStamped(child_frame_id=self._cfg['camera_name'], transform=ctf_)
         sctf_.header.frame_id = self._cfg['camera_frame_parent']
-        cam_delay_dur_ = self.get_camera_delay_duration(x)
-        sctf_.header.stamp.sec = cam_delay_dur_.seconds
-        sctf_.header.stamp.nanosec = cam_delay_dur_.nanoseconds
+        cam_delay_dur_ = self.get_camera_delay_duration(x).to_msg()
+        sctf_.header.stamp.sec = cam_delay_dur_.sec
+        sctf_.header.stamp.nanosec = cam_delay_dur_.nanosec
         out_.sensor_transforms.append(sctf_)
         
         return out_
