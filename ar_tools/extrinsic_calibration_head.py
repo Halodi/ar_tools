@@ -5,7 +5,6 @@ from ar_tools.extrinsic_calibration_base import ExtrinsicCalibrationBase
 
 import rclpy
 from halodi_msgs.msg import RobotJointCalibrationInfo
-from geometry_msgs.msg import Transform
 
 class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
     def __init__(self, config_file):
