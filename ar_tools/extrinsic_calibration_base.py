@@ -2,7 +2,7 @@ import rclpy, tf2_ros
 from rclpy.qos import *
 from geometry_msgs.msg import Transform, TransformStamped
 from tf2_msgs.msg import TFMessage
-from halodi_msgs.msg import ExtrinsicCalibrationInfo
+from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 
 from time import perf_counter
 from scipy.optimize import minimize
@@ -19,25 +19,38 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._optimization_result = None
         
         self._tf_buffer_core = None
-        self._seek_static_target_in_tf_cb = False
         self._ar_stamps_and_tfs = []
 
     def tf_cb(self, msg):
         who = 'default_authority'
         for tf in msg.transforms:
-           self._tf_buffer_core.set_transform(tf, who)
-           
-        if self._seek_static_target_in_tf_cb:
-            for tf in msg.transforms:
-                if tf.child_frame_id == self._cfg['static_target_frame']:
-                    ts_ = rclpy.time.Time(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
-                    self._ar_stamps_and_tfs.append([ ts_, transform_to_matrix(tf.transform) ])
-                    break                    
+           self._tf_buffer_core.set_transform(tf, who)              
 
     def tf_static_cb(self, msg):
         who = 'default_authority'
         for tf in msg.transforms:
             self._tf_buffer_core.set_transform_static(tf, who)
+            
+    def markers_cb(self, msg):
+        for marker in msg.markers:
+            if marker.pose.header.frame_id == self._cfg['static_target_frame']:
+                ts_ = rclpy.time.Time(seconds=marker.pose.header.stamp.sec, nanoseconds=marker.pose.header.stamp.nanosec)
+                
+                tf_ = Transform()
+                tf_.translation.x = marker.pose.pose.position.x
+                tf_.translation.y = marker.pose.pose.position.y
+                tf_.translation.z = marker.pose.pose.position.z
+                tf_.rotation.x = marker.pose.pose.orientation.x
+                tf_.rotation.y = marker.pose.pose.orientation.y
+                tf_.rotation.z = marker.pose.pose.orientation.z
+                tf_.rotation.w = marker.pose.pose.orientation.w
+                tf_mat_ = transform_to_matrix(tf_)
+                
+                if msg.header.frame_id == self._cfg['camera_frame']: self._ar_stamps_and_tfs.append([ ts_, tf_mat_ ])
+                else: self._ar_stamps_and_tfs.append([ ts_, tf_mat_, msg.header.frame_id ])
+                    
+                break
+                
         
     def aggregate_data(self):
         self.get_logger().info("Collecting data from TF ...")
@@ -55,16 +68,21 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 rclpy.spin_once(self)
                 throttle_.wait()            
         
-        self._seek_static_target_in_tf_cb = False
-        spin_for(self._cfg['camera_delay_max'] + 5)
-        self._seek_static_target_in_tf_cb = True
+        spin_for(self._cfg['camera_delay_max'] + 5)        
+        ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.markers_cb, 10)
         spin_for(self._cfg['data_aggregation_duration'])
 
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
+        self.destroy_subscription(ar_sub_)
         
         skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_aggregation_samples_n'])
         if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
+        
+        for ar_stamp_and_tf in self._ar_stamps_and_tfs:
+            if len(ar_stamp_and_tf) == 3:
+                cw_inv_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], ar_stamp_and_tf[0])
+                ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_inv_.transform), ar_stamp_and_tf[1])                
             
         self.get_logger().info("Data aggregation finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
         
