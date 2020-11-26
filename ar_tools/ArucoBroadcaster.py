@@ -23,7 +23,7 @@ class ArucoBroadcaster:
         self._node = rclpy.create_node("aruco_publisher")
         
         self._stf_client = self._node.create_client(GetStampedTF, 'get_stamped_tf')
-        self._stf_req = GetStampedTF.Request(parent_frame=self._cfg.camera_frame, child_frame=self._cfg.camera_frame)
+        self._stf_req = GetStampedTF.Request(parent_frame=self._cfg.parent_frame, child_frame=self._cfg.camera_frame)
               
         self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
         self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, 10)

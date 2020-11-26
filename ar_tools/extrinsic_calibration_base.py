@@ -34,7 +34,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def markers_cb(self, msg):
         for marker in msg.markers:
             if marker.pose.header.frame_id == self._cfg['static_target_frame']:
-                ts_ = rclpy.time.Time(seconds=marker.pose.header.stamp.sec, nanoseconds=marker.pose.header.stamp.nanosec)
+                ts_ = rclpy.time.Time(seconds=msg.header.stamp.sec, nanoseconds=msg.header.stamp.nanosec)
                 
                 tf_ = Transform()
                 tf_.translation.x = marker.pose.pose.position.x
@@ -78,11 +78,12 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_aggregation_samples_n'])
         if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
-        
+
         for ar_stamp_and_tf in self._ar_stamps_and_tfs:
             if len(ar_stamp_and_tf) == 3:
-                cw_inv_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], ar_stamp_and_tf[0])
-                ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_inv_.transform), ar_stamp_and_tf[1])                
+                wc_tf_ = self._tf_buffer_core.lookup_transform_core(ar_stamp_and_tf[2], self._cfg['camera_frame'], ar_stamp_and_tf[0])
+                wc_inv_mat_ = invert_transform_matrix(transform_to_matrix(wc_tf_.transform))
+                ar_stamp_and_tf[1] = np.matmul(wc_inv_mat_, ar_stamp_and_tf[1])
             
         self.get_logger().info("Data aggregation finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
         
@@ -117,7 +118,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)
                 I_.append(i)
             except Exception as e:
-                #print(str(e))
+                print(str(e))
                 continue
 
         return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else 1e9

@@ -56,7 +56,7 @@ class STF_Server(rclpy.node.Node):
             try:
                 age_ns_ = int((self._latest_clock[2] - request.monotonic_stamp) * 1e9)
                 ts_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1]) - Duration(nanoseconds=age_ns_)
-                
+
                 sensor_delay_ = self._sensor_delay_durations.get(request.child_frame)
                 if sensor_delay_ is not None: ts_ = ts_ - sensor_delay_
                 
@@ -75,6 +75,7 @@ def main(args=None):
     
     stfs_ = STF_Server()
     
+    rclpy.spin(stfs_)
     throttle_ = Throttle(int(sys.argv[1]))
     while rclpy.ok():
         rclpy.spin_once(stfs_)

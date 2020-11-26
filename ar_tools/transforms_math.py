@@ -32,3 +32,10 @@ def matrix_to_transform(m):
 def multiply_transforms(tfA, tfB):
     return matrix_to_transform(np.matmul(transform_to_matrix(tfA), transform_to_matrix(tfB)))
 
+def invert_transform_matrix(m):
+    out_ = np.empty([4,4])
+    out_[3,:] = [ 0, 0, 0, 1 ]
+    out_[:3,:3] = m[:3,:3].T
+    out_[:3,3] = -np.matmul(out_[:3,:3], m[:3,3])
+
+    return out_
