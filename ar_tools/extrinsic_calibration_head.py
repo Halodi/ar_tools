@@ -42,8 +42,9 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-    if head_calibrator_.aggregate_data_and_optimize():
-        head_calibrator_.publish_extrinsic_calibration_info()
+    head_calibrator_.aggregate_data_and_optimize()
+#    if head_calibrator_.aggregate_data_and_optimize():
+#        head_calibrator_.publish_extrinsic_calibration_info()
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()

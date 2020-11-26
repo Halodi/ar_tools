@@ -4,7 +4,7 @@ from geometry_msgs.msg import Transform, TransformStamped
 from tf2_msgs.msg import TFMessage
 from halodi_msgs.msg import ExtrinsicCalibrationInfo
 
-from time import monotonic
+from time import perf_counter
 from scipy.optimize import minimize
 import numpy as np
 from ar_tools.transforms_math import *
@@ -50,13 +50,13 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
 
         throttle_ = Throttle(self._cfg['data_aggregation_frequency'])        
         def spin_for(dt):
-            end_time_ = monotonic() + dt
-            while monotonic() < end_time_:
+            end_time_ = perf_counter() + dt
+            while perf_counter() < end_time_:
                 rclpy.spin_once(self)
                 throttle_.wait()            
         
         self._seek_static_target_in_tf_cb = False
-        spin_for(self._cfg['camera_delay_max'] + 1)
+        spin_for(self._cfg['camera_delay_max'] + 5)
         self._seek_static_target_in_tf_cb = True
         spin_for(self._cfg['data_aggregation_duration'])
 
