@@ -20,7 +20,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         self._tf_buffer_core = None
         self._seek_static_target_in_tf_cb = False
-        self._ar_msgs = []
+        self._ar_stamps_and_tfs = []
 
     def tf_cb(self, msg):
         who = 'default_authority'
@@ -29,11 +29,10 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
            
         if self._seek_static_target_in_tf_cb:
             for tf in msg.transforms:
-                if tf.child_frame_id == self._cfg['static_target_ID']:
+                if tf.child_frame_id == self._cfg['static_target_frame']:
                     ts_ = rclpy.time.Time(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
-                    self._ar_msgs.append([ ts_, transform_to_matrix(tf.transform) ])
-                    break
-                    
+                    self._ar_stamps_and_tfs.append([ ts_, transform_to_matrix(tf.transform) ])
+                    break                    
 
     def tf_static_cb(self, msg):
         who = 'default_authority'
@@ -56,24 +55,18 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 rclpy.spin_once(self)
                 throttle_.wait()            
         
-        if self._cfg['camera_delay_max'] > 0:
-            self._seek_static_target_in_tf_cb = False
-            spin_for(self._cfg['camera_delay_max'] + 1)
-        
+        self._seek_static_target_in_tf_cb = False
+        spin_for(self._cfg['camera_delay_max'] + 1)
         self._seek_static_target_in_tf_cb = True
         spin_for(self._cfg['data_aggregation_duration'])
-            
-        if self._cfg['camera_delay_min'] < 0:
-            self._seek_static_target_in_tf_cb = False
-            spin_for(-self._cfg['camera_delay_min'] + 1)
 
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
         
-        skip_ = int(len(self._ar_msgs) / self._cfg['data_aggregation_samples_n'])
-        if skip_ > 1: self._ar_msgs = self._ar_msgs[::skip_]
+        skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_aggregation_samples_n'])
+        if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
             
-        self.get_logger().info("Data aggregation finished with " + str(len(self._ar_msgs)) + " marker samples")
+        self.get_logger().info("Data aggregation finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
         
     def get_static_transform_matrix(self, x):
         return np.eye(4)
@@ -92,15 +85,15 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         camera_delay_ = self.get_camera_delay_duration(x)
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
-        m_ = np.empty([ len(self._ar_msgs), 6 ])
+        m_ = np.empty([ len(self._ar_stamps_and_tfs), 6 ])
         I_ = []
         
-        for i in range(len(self._ar_msgs)):
+        for i in range(len(self._ar_stamps_and_tfs)):
             try:
-                ts_ = self._ar_msgs[i][0] - camera_delay_
+                ts_ = self._ar_stamps_and_tfs[i][0] - camera_delay_
                 wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
-                wt_mat_ = np.matmul(wc_mat_, self._ar_msgs[i][1])
+                wt_mat_ = np.matmul(wc_mat_, self._ar_stamps_and_tfs[i][1])
                 
                 m_[i,:3] = wt_mat_[:3,3]
                 m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)
