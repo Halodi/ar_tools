@@ -47,15 +47,14 @@ Note that the first element of the parameter vector to be optimized is assumed t
 
 #### extrinsic\_calibration.json
 - common: contains parameters used by all extrinsic calibration nodes
-    - tf\_listener\_warmup\_duration: time for subscribing to TFs before also subscribing to marker msgs
     - data\_aggregation\_duration: time for subscribing to both TFs and marker msgs
     - data\_aggregation\_frequency: subscriber throttling rate
     - data\_aggregation\_samples\_n: reduce total marker samples to >= this value after collection
     - markers\_topic: topic for markers
-    - static\_target\_ID: frame\_id for a marker that is stationary relative to the robot
-    - static\_frame: a fixed TF frame relative to the robot, nominally the root of the TF tree
-    - camera\_frame\_parent: the immediate parent frame of the camera
-    - camera\_delay\_min/max: bounds of sensor delay for clipping purposes. Currently, only >=0 values are supported
+    - static\_target\_frame: frame ID for a marker that is stationary relative to the robot
+    - static\_frame: a fixed TF frame ID relative to the robot, nominally the root of the TF tree
+    - camera\_frame\_parent: the immediate parent frame ID of the camera
+    - camera\_delay\_min/max: bounds of sensor delay for clipping purposes
     - outbound\_calibration\_topic: for publishing calibration info if optimization is successful
     - camera\_name: camera name for publishing
 - head: parameters for calibrating a camera mounted in/on the head

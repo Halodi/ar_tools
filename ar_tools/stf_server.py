@@ -20,11 +20,11 @@ class STF_Server(rclpy.node.Node):
         self._tf_buffer_core = tf2_ros.BufferCore()
         self._sensor_delay_durations = {}
           
-        self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self.create_subscription(Clock, "/clock", self.clock_cb, QoSProfile(depth=100, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.create_subscription(TFMessage, "/tf", self.tf_cb,
-            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT))
+            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST))
         self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
-            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST))
             
         self._srv = self.create_service(GetStampedTF, 'get_stamped_tf', self.get_stf_srv)
         

@@ -1,7 +1,7 @@
 {
-    "parent_frame": "kinect0_color",
+    "parent_frame": "World",
     "camera_frame": "kinect0_color",
-    "broadcast_transforms": false, 
+    "broadcast_transforms": true, 
     "image_scaling": 1.0,
     "aruco_dict": "4X4_50",    
     

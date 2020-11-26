@@ -1,8 +1,8 @@
 import rclpy, tf2_ros
 from rclpy.qos import *
-from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 from geometry_msgs.msg import Transform, TransformStamped
 from tf2_msgs.msg import TFMessage
+from halodi_msgs.msg import ExtrinsicCalibrationInfo
 
 from time import monotonic
 from scipy.optimize import minimize
@@ -18,30 +18,22 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._cfg['x0_'] = x0
         self._optimization_result = None
         
-        self._tf_buffer_core = None 
+        self._tf_buffer_core = None
+        self._seek_static_target_in_tf_cb = False
         self._ar_msgs = []
-        
-    def ar_cb(self, msg):
-        for marker in msg.markers:
-            if marker.pose.header.frame_id == self._cfg['static_target_ID']:
-                ts_ = rclpy.time.Time(seconds=msg.header.stamp.sec, nanoseconds=msg.header.stamp.nanosec)
-                
-                tf_ = Transform()
-                tf_.translation.x = marker.pose.pose.position.x
-                tf_.translation.y = marker.pose.pose.position.y
-                tf_.translation.z = marker.pose.pose.position.z
-                tf_.rotation.x = marker.pose.pose.orientation.x
-                tf_.rotation.y = marker.pose.pose.orientation.y
-                tf_.rotation.z = marker.pose.pose.orientation.z
-                tf_.rotation.w = marker.pose.pose.orientation.w
-                
-                self._ar_msgs.append([ ts_, transform_to_matrix(tf_) ])
-                break
 
     def tf_cb(self, msg):
         who = 'default_authority'
         for tf in msg.transforms:
            self._tf_buffer_core.set_transform(tf, who)
+           
+        if self._seek_static_target_in_tf_cb:
+            for tf in msg.transforms:
+                if tf.child_frame_id == self._cfg['static_target_ID']:
+                    ts_ = rclpy.time.Time(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
+                    self._ar_msgs.append([ ts_, transform_to_matrix(tf.transform) ])
+                    break
+                    
 
     def tf_static_cb(self, msg):
         who = 'default_authority'
@@ -49,30 +41,34 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             self._tf_buffer_core.set_transform_static(tf, who)
         
     def aggregate_data(self):
+        self.get_logger().info("Collecting data from TF ...")
+
         self._tf_buffer_core = tf2_ros.BufferCore(Duration(seconds=600))
         tf_sub_ = self.create_subscription(TFMessage, "/tf", self.tf_cb,
-            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.BEST_EFFORT))
+            QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST))
         tf_static_sub_ = self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
-            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
+            QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST))
 
-        throttle_ = Throttle(self._cfg['data_aggregation_frequency'])
-
-        self.get_logger().info("Firstly subscribing to TF for " + str(self._cfg['tf_listener_warmup_duration']) + " seconds ...")
-        end_time_ = monotonic() + self._cfg['tf_listener_warmup_duration']
-        while monotonic() < end_time_:
-            rclpy.spin_once(self)
-            throttle_.wait()
-
-        ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.ar_cb, 10)
-        self.get_logger().info("Subscribing to TF and marker data for " + str(self._cfg['data_aggregation_duration']) + " seconds ...")
-        end_time_ = monotonic() + self._cfg['data_aggregation_duration']
-        while monotonic() < end_time_:
-            rclpy.spin_once(self)
-            throttle_.wait()
+        throttle_ = Throttle(self._cfg['data_aggregation_frequency'])        
+        def spin_for(dt):
+            end_time_ = monotonic() + dt
+            while monotonic() < end_time_:
+                rclpy.spin_once(self)
+                throttle_.wait()            
+        
+        if self._cfg['camera_delay_max'] > 0:
+            self._seek_static_target_in_tf_cb = False
+            spin_for(self._cfg['camera_delay_max'] + 1)
+        
+        self._seek_static_target_in_tf_cb = True
+        spin_for(self._cfg['data_aggregation_duration'])
+            
+        if self._cfg['camera_delay_min'] < 0:
+            self._seek_static_target_in_tf_cb = False
+            spin_for(-self._cfg['camera_delay_min'] + 1)
 
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
-        self.destroy_subscription(ar_sub_)
         
         skip_ = int(len(self._ar_msgs) / self._cfg['data_aggregation_samples_n'])
         if skip_ > 1: self._ar_msgs = self._ar_msgs[::skip_]

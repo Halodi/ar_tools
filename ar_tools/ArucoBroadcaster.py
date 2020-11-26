@@ -6,7 +6,6 @@ from collections import namedtuple
 from ar_tools.transforms_math import multiply_transforms
 
 import rclpy, tf2_ros
-from rclpy.qos import *
 from geometry_msgs.msg import TransformStamped, PoseStamped, Point
 from std_msgs.msg import Header
 from halodi_msgs.msg import ARMarker, ARMarkers
@@ -26,7 +25,7 @@ class ArucoBroadcaster:
         self._stf_client = self._node.create_client(GetStampedTF, 'get_stamped_tf')
         self._stf_req = GetStampedTF.Request(parent_frame=self._cfg.camera_frame, child_frame=self._cfg.camera_frame)
               
-        self._broadcaster = tf2_ros.TransformBroadcaster(self._node, QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
         self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, 10)
         
     def run(self):
@@ -80,7 +79,7 @@ class ArucoBroadcaster:
             marker.pose.pose.orientation.z = ttf_.rotation.z
             marker.pose.pose.orientation.w = ttf_.rotation.w
         
-        if len(tfs_) is not 0 and self._cfg.broadcast_transforms: self._broadcaster.sendTransform(tfs_)
+        if self._cfg.broadcast_transforms and len(tfs_) is not 0: self._broadcaster.sendTransform(tfs_)
         self._publisher.publish(markers_msg_)
                 
     def get_aruco_markers(self, image_grayscale):

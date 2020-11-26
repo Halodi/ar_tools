@@ -1,12 +1,10 @@
 {
     "common":
     {
-        "tf_listener_warmup_duration": 5.0,
         "data_aggregation_duration": 15.0,
         "data_aggregation_frequency": 50,
         "data_aggregation_samples_n": 200,
-        "markers_topic": "/aruco/kinect0_color",
-        "static_target_ID": "0",
+        "static_target_frame": "0",
         
         "static_frame": "World",
         "camera_frame_parent": "head",        
