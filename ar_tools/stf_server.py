@@ -16,7 +16,7 @@ class STF_Server(rclpy.node.Node):
         super().__init__('stf_server')
             
         self._lock = Lock()
-        self._latest_clock = [ 0, 0, 0 ]
+        self._latest_clock = [ 0, 0 ]
         self._tf_buffer_core = tf2_ros.BufferCore()
         self._sensor_delay_durations = {}
           
@@ -30,9 +30,8 @@ class STF_Server(rclpy.node.Node):
         
     def clock_cb(self, msg):
         with self._lock:
-            self._latest_clock[0] = msg.clock.sec
-            self._latest_clock[1] = msg.clock.nanosec
-            self._latest_clock[2] = perf_counter()
+            self._latest_clock[0] = int(msg.clock.sec * 1e9) + msg.clock.nanosec
+            self._latest_clock[1] = perf_counter()
             
     def tf_cb(self, msg):
         who = 'default_authority'
@@ -46,22 +45,19 @@ class STF_Server(rclpy.node.Node):
                     
             for tf in msg.transforms:
                 if tf.header.stamp.sec != 0 or tf.header.stamp.nanosec != 0:
-                    dur_ = Duration(seconds=tf.header.stamp.sec, nanoseconds=tf.header.stamp.nanosec)
-                    self._sensor_delay_durations[tf.child_frame_id] = dur_
+                    ns_ = int(tf.header.stamp.sec * 1e9) + tf.header.stamp.nanosec
+                    self._sensor_delay_durations[tf.child_frame_id] = ns_
                     
                 self._tf_buffer_core.set_transform_static(tf, who)
             
     def get_stf_srv(self, request, response):
         with self._lock:            
             try:
-                latest_clock_time_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1])
-                age_ns_ = int((self._latest_clock[2] - request.monotonic_stamp) * 1e9)
-                abs_age_ns_dur_ = Duration(nanoseconds=abs(age_ns_))
-                ts_ = latest_clock_time_ - abs_age_ns_dur_ if age_ns_ >= 0 else latest_clock_time_ + abs_age_ns_dur_
-
+                age_ns_ = int((self._latest_clock[1] - request.monotonic_stamp) * 1e9)
                 sensor_delay_ = self._sensor_delay_durations.get(request.child_frame)
-                if sensor_delay_ is not None: ts_ = ts_ - sensor_delay_
-                
+                if sensor_delay_ is not None: age_ns_ += sensor_delay_
+
+                ts_ = rclpy.time.Time(nanoseconds=self._latest_clock[0] - age_ns_)
                 response.stf = self._tf_buffer_core.lookup_transform_core(request.parent_frame, request.child_frame, ts_)
                 response.ok = True
             except Exception as e:

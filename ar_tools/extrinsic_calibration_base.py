@@ -92,15 +92,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def get_camera_frame_adjustment_matrix(self, x):
         return self.get_static_transform_matrix(x)
         
-    def get_camera_delay_duration(self, x):
-        delay_ = max(x[0], 0.0)
-        s_ = int(delay_)
-        ns_ = int((delay_ - s_) * 1e9)
-        
-        return Duration(seconds=s_, nanoseconds=ns_)
-        
     def stationary_target_error_fn(self, x):
-        camera_delay_ = self.get_camera_delay_duration(x)
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
         m_ = np.empty([ len(self._ar_stamps_and_tfs), 6 ])
@@ -108,7 +100,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         for i in range(len(self._ar_stamps_and_tfs)):
             try:
-                ts_ = self._ar_stamps_and_tfs[i][0] + camera_delay_
+                ts_ = rclpy.time.Time(nanoseconds=self._ar_stamps_and_tfs[i][0].nanoseconds - int(x[0] * 1e9))
                 wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
                 wt_mat_ = np.matmul(wc_mat_, self._ar_stamps_and_tfs[i][1])
