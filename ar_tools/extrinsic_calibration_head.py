@@ -13,13 +13,13 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
             
         de_bounds_ = []
         for i in range(len(config_['head']['mean'])):
-            min_ = config_['head']['mean'][i] - config['head']['extents'][i]
-            max_ = config_['head']['mean'][i] + config['head']['extents'][i]
+            min_ = config_['head']['mean'][i] - config_['head']['extents'][i]
+            max_ = config_['head']['mean'][i] + config_['head']['extents'][i]
             de_bounds_.append(( min_, max_ ))
         
         super().__init__(config_['common'], de_bounds_)
         
-    def get_static_transform_matrix(self, x):
+    def _get_static_transform_matrix(self, x):
         head_camera_matrix_ = np.empty([4,4])
         head_camera_matrix_[3,:] = [ 0, 0, 0, 1 ]
         head_camera_matrix_[:3,3] = x[2:5]
@@ -27,11 +27,19 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
         
         return head_camera_matrix_
         
-    def get_camera_frame_adjustment_matrix(self, x):
+    def _get_camera_frame_adjustment_matrix(self, x):
         head_pitch_matrix_ = np.eye(4)
         head_pitch_matrix_[:3,:3] = Rotation.from_rotvec([ 0, x[1], 0 ]).as_matrix()
         
-        return np.matmul(head_pitch_matrix_, self.get_static_transform_matrix(x))        
+        return np.matmul(head_pitch_matrix_, self.get_static_transform_matrix(x))
+
+    def get_camera_frame_adjustment_matrix(self, x):
+        m_ = np.empty([4,4])
+        m_[3,:] = [ 0, 0, 0, 1 ]
+        m_[:3,3] = [ 0.0985, -0.032, 0.18 ]
+        m_[:3,:3] = Rotation.from_quat([ -0.001, 0.1039, -0.006, 0.994 ]).as_matrix()
+
+        return m_
         
     def get_extrinsic_calibration_info_msg(self, x):
         out_ = super().get_extrinsic_calibration_info_msg(x)

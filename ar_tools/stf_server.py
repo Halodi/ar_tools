@@ -54,8 +54,10 @@ class STF_Server(rclpy.node.Node):
     def get_stf_srv(self, request, response):
         with self._lock:            
             try:
+                latest_clock_time_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1])
                 age_ns_ = int((self._latest_clock[2] - request.monotonic_stamp) * 1e9)
-                ts_ = rclpy.time.Time(seconds=self._latest_clock[0], nanoseconds=self._latest_clock[1]) - Duration(nanoseconds=age_ns_)
+                abs_age_ns_dur_ = Duration(nanoseconds=abs(age_ns_))
+                ts_ = latest_clock_time_ - abs_age_ns_dur_ if age_ns_ >= 0 else latest_clock_time_ + abs_age_ns_dur_
 
                 sensor_delay_ = self._sensor_delay_durations.get(request.child_frame)
                 if sensor_delay_ is not None: ts_ = ts_ - sensor_delay_
@@ -83,3 +85,6 @@ def main(args=None):
     
     stfs_.destroy_node()
     rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

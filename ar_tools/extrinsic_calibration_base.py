@@ -51,9 +51,8 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                     
                 break
                 
-        
     def collect_data(self):
-        self.get_logger().info("Collecting data from TF ...")
+        self.get_logger().info("Collecting data ...")
 
         self._tf_buffer_core = tf2_ros.BufferCore(Duration(seconds=int(self._cfg['data_collection_duration'])+600))
         tf_sub_ = self.create_subscription(TFMessage, "/tf", self.tf_cb,
@@ -68,7 +67,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 rclpy.spin_once(self)
                 throttle_.wait()            
         
-        spin_for(self._cfg['camera_delay_max'] + 5)        
+        spin_for(self._cfg['tf_warmup_duration'])
         ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.markers_cb, 10)
         spin_for(self._cfg['data_collection_duration'])
 
@@ -79,13 +78,11 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_collection_samples_n'])
         if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
 
-        print(self._ar_stamps_and_tfs[0][1])
         for ar_stamp_and_tf in self._ar_stamps_and_tfs:
             if len(ar_stamp_and_tf) == 3:
-                cw_tf_ = self._tf_buffer_core.lookup_transform_core(ar_stamp_and_tf[2], self._cfg['camera_frame'], ar_stamp_and_tf[0])
+                cw_tf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], ar_stamp_and_tf[0])
                 ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_tf_.transform), ar_stamp_and_tf[1])
                 ar_stamp_and_tf.pop()
-        print(self._ar_stamps_and_tfs[0][1])
             
         self.get_logger().info("Data collection finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
         
@@ -96,13 +93,13 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         return self.get_static_transform_matrix(x)
         
     def get_camera_delay_duration(self, x):
-        delay_ = np.clip(x[0], self._cfg['camera_delay_min'], self._cfg['camera_delay_max'])
+        delay_ = max(x[0], 0.0)
         s_ = int(delay_)
         ns_ = int((delay_ - s_) * 1e9)
         
         return Duration(seconds=s_, nanoseconds=ns_)
         
-    def static_target_error_fn(self, x):
+    def stationary_target_error_fn(self, x):
         camera_delay_ = self.get_camera_delay_duration(x)
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
@@ -111,7 +108,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         for i in range(len(self._ar_stamps_and_tfs)):
             try:
-                ts_ = self._ar_stamps_and_tfs[i][0] - camera_delay_
+                ts_ = self._ar_stamps_and_tfs[i][0] + camera_delay_
                 wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
                 wt_mat_ = np.matmul(wc_mat_, self._ar_stamps_and_tfs[i][1])
@@ -119,9 +116,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 m_[i,:3] = wt_mat_[:3,3]
                 m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)
                 I_.append(i)
-            except Exception as e:
-                print(str(e))
-                continue
+            except Exception as e: self.get_logger().error(str(e))
                 
         if len(I_) > 1:
             std_ = np.std(m_[I_,:], axis=0).sum()
@@ -130,7 +125,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
-        res_ = differential_evolution(self.static_target_error_fn, self._cfg['de_bounds_'],
+        res_ = differential_evolution(self.stationary_target_error_fn, self._cfg['de_bounds_'],
             strategy      = self._cfg['de'].get('strategy', 'best1bin'),
             maxiter       = self._cfg['de'].get('maxiter', 1000),
             popsize       = self._cfg['de'].get('popsize', 15),
