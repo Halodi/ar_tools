@@ -5,17 +5,17 @@ from tf2_msgs.msg import TFMessage
 from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 
 from time import perf_counter
-from scipy.optimize import minimize
+from scipy.optimize import differential_evolution
 import numpy as np
 from ar_tools.transforms_math import *
 from ar_tools.throttle import Throttle
 
 class ExtrinsicCalibrationBase(rclpy.node.Node):
-    def __init__(self, cfg, x0):
+    def __init__(self, cfg, de_bounds):
         super().__init__('extrinsic_calibration')
          
         self._cfg = cfg
-        self._cfg['x0_'] = x0
+        self._cfg['de_bounds_'] = de_bounds
         self._optimization_result = None
         
         self._tf_buffer_core = None
@@ -33,7 +33,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             
     def markers_cb(self, msg):
         for marker in msg.markers:
-            if marker.pose.header.frame_id == self._cfg['static_target_frame']:
+            if marker.pose.header.frame_id == self._cfg['stationary_target_frame']:
                 ts_ = rclpy.time.Time(seconds=msg.header.stamp.sec, nanoseconds=msg.header.stamp.nanosec)
                 
                 tf_ = Transform()
@@ -52,16 +52,16 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
                 break
                 
         
-    def aggregate_data(self):
+    def collect_data(self):
         self.get_logger().info("Collecting data from TF ...")
 
-        self._tf_buffer_core = tf2_ros.BufferCore(Duration(seconds=600))
+        self._tf_buffer_core = tf2_ros.BufferCore(Duration(seconds=int(self._cfg['data_collection_duration'])+600))
         tf_sub_ = self.create_subscription(TFMessage, "/tf", self.tf_cb,
             QoSProfile(depth=100, durability=DurabilityPolicy.VOLATILE, history=HistoryPolicy.KEEP_LAST))
         tf_static_sub_ = self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
             QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST))
 
-        throttle_ = Throttle(self._cfg['data_aggregation_frequency'])        
+        throttle_ = Throttle(self._cfg['data_collection_frequency'])
         def spin_for(dt):
             end_time_ = perf_counter() + dt
             while perf_counter() < end_time_:
@@ -70,22 +70,24 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         spin_for(self._cfg['camera_delay_max'] + 5)        
         ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.markers_cb, 10)
-        spin_for(self._cfg['data_aggregation_duration'])
+        spin_for(self._cfg['data_collection_duration'])
 
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
         self.destroy_subscription(ar_sub_)
         
-        skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_aggregation_samples_n'])
+        skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_collection_samples_n'])
         if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
 
+        print(self._ar_stamps_and_tfs[0][1])
         for ar_stamp_and_tf in self._ar_stamps_and_tfs:
             if len(ar_stamp_and_tf) == 3:
-                wc_tf_ = self._tf_buffer_core.lookup_transform_core(ar_stamp_and_tf[2], self._cfg['camera_frame'], ar_stamp_and_tf[0])
-                wc_inv_mat_ = invert_transform_matrix(transform_to_matrix(wc_tf_.transform))
-                ar_stamp_and_tf[1] = np.matmul(wc_inv_mat_, ar_stamp_and_tf[1])
+                cw_tf_ = self._tf_buffer_core.lookup_transform_core(ar_stamp_and_tf[2], self._cfg['camera_frame'], ar_stamp_and_tf[0])
+                ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_tf_.transform), ar_stamp_and_tf[1])
+                ar_stamp_and_tf.pop()
+        print(self._ar_stamps_and_tfs[0][1])
             
-        self.get_logger().info("Data aggregation finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
+        self.get_logger().info("Data collection finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
         
     def get_static_transform_matrix(self, x):
         return np.eye(4)
@@ -120,12 +122,23 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             except Exception as e:
                 print(str(e))
                 continue
-
-        return np.var(m_[I_,:], axis=0).sum() if len(I_) > 1 else 1e9
+                
+        if len(I_) > 1:
+            std_ = np.std(m_[I_,:], axis=0).sum()
+            return std_ * std_
+        else: return 1e9
             
     def optimize(self):
         self.get_logger().info("Optimizing ...")
-        res_ = minimize(self.static_target_error_fn, self._cfg['x0_'])
+        res_ = differential_evolution(self.static_target_error_fn, self._cfg['de_bounds_'],
+            strategy      = self._cfg['de'].get('strategy', 'best1bin'),
+            maxiter       = self._cfg['de'].get('maxiter', 1000),
+            popsize       = self._cfg['de'].get('popsize', 15),
+            tol           = self._cfg['de'].get('tol', 0.01),
+            mutation      = self._cfg['de'].get('mutation', 0.5),
+            recombination = self._cfg['de'].get('recombination', 0.7),
+            polish        = self._cfg['de'].get('polish', True),
+            workers       = self._cfg['de'].get('workers', 1))
         
         if res_.success:
             self._optimization_result = res_
@@ -135,8 +148,8 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
             self.get_logger().error("Optimization failed")
             return False
     
-    def aggregate_data_and_optimize(self):
-        self.aggregate_data()
+    def collect_data_and_optimize(self):
+        self.collect_data()
         return self.optimize()
         
     def get_extrinsic_calibration_info_msg(self, x):

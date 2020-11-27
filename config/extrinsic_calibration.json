@@ -1,26 +1,35 @@
 {
     "common":
     {
-        "data_aggregation_duration": 15.0,
-        "data_aggregation_frequency": 100,
-        "data_aggregation_samples_n": 200,
+        "data_collection_duration": 15,
+        "data_collection_frequency": 100,
+        "data_collection_samples_n": 200,
         "markers_topic": "/aruco/kinect0_color",
-        "camera_frame": "kinect0_color",
-        "static_target_frame": "0",
+        "stationary_target_frame": "0",
         
         "static_frame": "World",
-        "camera_frame_parent": "afterJ_neck_y",        
-        "camera_delay_min": 0.0,
-        "camera_delay_max": 0.5,
+        "camera_frame_parent": "head",
+        "camera_frame": "kinect0_color",
         
         "outbound_calibration_topic": "/eve/calibration",
-        "camera_name": "kinect0_color"
+        "camera_name": "kinect0_color",
+        
+        "de":
+        {
+            "strategy": "best1bin",
+            "maxiter": 1000,
+            "popsize": 15,
+            "tol": 0.01,
+            "mutation": 0.5,
+            "recombination": 0.7,
+            "polish": true,
+            "workers": 1
+        }
     },
     
     "head":
     {
-        "camera_delay": 0.1,
-        "pitch_offset": 0.0,
-        "head_to_camera_xyz_ypr": [ 0.1, -0.03, 0.2, 0.0, 0.0, 0.0 ]
+        "mean"   : [ 0.1, 0.0, 0.1 , -0.03, 0.2 , 0.0, 0.0, 0.0 ],
+        "extents": [ 0.1, 0.1, 0.05, 0.05 , 0.05, 0.2, 0.2, 0.2 ]
     }
 }

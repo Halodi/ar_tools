@@ -43,24 +43,25 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_ARUCO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER
 
 ## Extrinsic calibration nodes
 Running calibration\_extrinsic\_ nodes requires a config file; refer to config/extrinsic\_calibration.json for an example. Requires a marker fixed in space e.g. on a wall, visible to the robot across a reasonable range of motion with a streaming node already running, e.g. aruco\_zed. Robot is assumed to be moving while data is being collected, e.g. through a calibration\_motion\_ node.
-Note that the first element of the parameter vector to be optimized is assumed to be the camera delay.
+Note that the first element of the parameter vector to be optimized is assumed to be a camera delay (>=0).
 
 #### extrinsic\_calibration.json
 - common: contains parameters used by all extrinsic calibration nodes
-    - data\_aggregation\_duration: time for subscribing to both TFs and marker msgs
-    - data\_aggregation\_frequency: subscriber throttling rate
-    - data\_aggregation\_samples\_n: reduce total marker samples to >= this value after collection
+    - data\_collection\_duration: time for subscribing to both TFs and marker msgs
+    - data\_collection\_frequency: subscriber throttling rate
+    - data\_collection\_samples\_n: reduce total marker samples to >= this value after collection
     - markers\_topic: topic for markers
-    - static\_target\_frame: frame ID for a marker that is stationary relative to the robot
+    - stationary\_target\_frame: frame ID for a marker that is stationary relative to the robot
     - static\_frame: a fixed TF frame ID relative to the robot, nominally the root of the TF tree
     - camera\_frame\_parent: the immediate parent frame ID of the camera
-    - camera\_delay\_min/max: bounds of sensor delay for clipping purposes. Min >= 0, max >= min
+    - camera\_frame: frame ID of the camera
     - outbound\_calibration\_topic: for publishing calibration info if optimization is successful
     - camera\_name: camera name for publishing
+    - de: some args for [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html)
 - head: parameters for calibrating a camera mounted in/on the head
+    - mean: [ camera\_delay, head\_pitch\_offset, head\_to\_camera\_xyz\_ypr ]
+    - extents: range of mean. DE bounds are calculated by mean +/- extents
     - camera\_delay: initial estimate of camera delay
-    - pitch\_offset: initial estimate of head pitch offset
-    - head\_to\_camera\_xyz\_ypr: initial estimate of a 6-tuple representing the static transform between the head and the camera
 
 ### calibration\_extrinsic\_head
 ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE

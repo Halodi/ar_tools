@@ -10,11 +10,14 @@ class ExtrinsicCalibrationHead(ExtrinsicCalibrationBase):
     def __init__(self, config_file):
         with open(config_file, 'r') as f:
             config_ = json.load(f)
+            
+        de_bounds_ = []
+        for i in range(len(config_['head']['mean'])):
+            min_ = config_['head']['mean'][i] - config['head']['extents'][i]
+            max_ = config_['head']['mean'][i] + config['head']['extents'][i]
+            de_bounds_.append(( min_, max_ ))
         
-        x0_ = [ config_['head']['camera_delay'], config_['head']['pitch_offset'] ]
-        x0_.extend(config_['head']['head_to_camera_xyz_ypr'])
-        
-        super().__init__(config_['common'], x0_)
+        super().__init__(config_['common'], de_bounds_)
         
     def get_static_transform_matrix(self, x):
         head_camera_matrix_ = np.empty([4,4])
@@ -42,8 +45,8 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-    head_calibrator_.aggregate_data_and_optimize()
-#    if head_calibrator_.aggregate_data_and_optimize():
+    head_calibrator_.collect_data_and_optimize()
+#    if head_calibrator_.collect_data_and_optimize():
 #        head_calibrator_.publish_extrinsic_calibration_info()
     
     head_calibrator_.destroy_node()
