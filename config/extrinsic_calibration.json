@@ -3,7 +3,6 @@
     {
         "tf_warmup_duration": 5,
         "data_collection_duration": 15,
-        "data_collection_frequency": 100,
         "data_collection_samples_n": 200,
         "markers_topic": "/aruco/kinect0_color",
         "stationary_target_frame": "0",

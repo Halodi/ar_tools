@@ -20,7 +20,9 @@ class Throttle:
             return True
             
 if __name__ == '__main__':
-    throttle_ = Throttle(1)
+    throttle_ = Throttle(10)
     while True:
-        if throttle_.poll():
-            print(perf_counter())
+        sleep(0.05)
+        throttle_.wait()
+        #if throttle_.poll():
+        print(perf_counter())

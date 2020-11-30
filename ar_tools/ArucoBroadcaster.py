@@ -2,7 +2,6 @@ import json, cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 from os.path import isfile
-from collections import namedtuple
 from ar_tools.transforms_math import multiply_transforms
 
 import rclpy, tf2_ros
@@ -16,17 +15,17 @@ from halodi_msgs.srv import GetStampedTF
 class ArucoBroadcaster:
     def __init__(self, rclpy_args, get_grayscale_img_fn, cfg):
         self._get_grayscale_img_fn = get_grayscale_img_fn
-        self._cfg = namedtuple("cfg", cfg.keys())(*cfg.values())
+        self._cfg = cfg
         self._marker_rot_adj = Rotation.from_rotvec([ 0, np.pi, 0 ])
     
         rclpy.init(args=rclpy_args)
         self._node = rclpy.create_node("aruco_publisher")
         
         self._stf_client = self._node.create_client(GetStampedTF, 'get_stamped_tf')
-        self._stf_req = GetStampedTF.Request(parent_frame=self._cfg.parent_frame, child_frame=self._cfg.camera_frame)
+        self._stf_req = GetStampedTF.Request(parent_frame=self._cfg['parent_frame'], child_frame=self._cfg['camera_frame'])
               
         self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
-        self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg.camera_frame, 10)
+        self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg['camera_frame'], 10)
         
     def run(self):
         while rclpy.ok():
@@ -34,7 +33,7 @@ class ArucoBroadcaster:
             
             if img_ is not None:
                 try:
-                    self._stf_req.monotonic_stamp = img_monotonic_stamp_
+                    self._stf_req.monotonic_stamp = img_monotonic_stamp_ if self._cfg['apply_timestamp_age'] else -1.0
                     future_ = self._stf_client.call_async(self._stf_req)
                     rclpy.spin_until_future_complete(self._node, future_)
                 
@@ -53,14 +52,14 @@ class ArucoBroadcaster:
         rclpy.shutdown()
         
     def find_and_publish_aruco_markers(self, image_grayscale, world_to_camera_stf):
-        if self._cfg.image_scaling != 1.0:
-            image_grayscale = cv2.resize(image_grayscale, (0,0), fx=self._cfg.image_scaling, fy=self._cfg.image_scaling)
+        if self._cfg['image_scaling'] != 1.0:
+            image_grayscale = cv2.resize(image_grayscale, (0,0), fx=self._cfg['image_scaling'], fy=self._cfg['image_scaling'])
             
-        markers_msg_ = ARMarkers(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg.parent_frame), markers=self.get_aruco_markers(image_grayscale))
+        markers_msg_ = ARMarkers(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg['parent_frame']), markers=self.get_aruco_markers(image_grayscale))
         tfs_ = []
             
         for marker in markers_msg_.markers:
-            tf_ = TransformStamped(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg.camera_frame), child_frame_id=marker.pose.header.frame_id)
+            tf_ = TransformStamped(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
             tf_.transform.translation.x = marker.pose.pose.position.x
             tf_.transform.translation.y = marker.pose.pose.position.y
             tf_.transform.translation.z = marker.pose.pose.position.z
@@ -79,22 +78,22 @@ class ArucoBroadcaster:
             marker.pose.pose.orientation.z = ttf_.rotation.z
             marker.pose.pose.orientation.w = ttf_.rotation.w
         
-        if self._cfg.broadcast_transforms and len(tfs_) is not 0: self._broadcaster.sendTransform(tfs_)
+        if self._cfg['broadcast_transforms'] and len(tfs_) is not 0: self._broadcaster.sendTransform(tfs_)
         self._publisher.publish(markers_msg_)
                 
     def get_aruco_markers(self, image_grayscale):
-        corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, self._cfg.aruco_dict_, parameters=self._cfg.aruco_params_)
+        corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, self._cfg['aruco_dict_'], parameters=self._cfg['aruco_params_'])
         msgs_ = []
         for i in range(len(corners)):
             id_ = str(ids[i][0])
-            if id_ not in self._cfg.marker_sizes.keys(): continue
+            if id_ not in self._cfg['marker_sizes'].keys(): continue
             
             msg_ = ARMarker(data="")
             msg_.pose.header.frame_id = id_
             for corner in corners[i][0]:
                 msg_.points.append(Point(x=float(corner[0]), y=float(corner[1]), z=0.0))
                 
-            rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], self._cfg.marker_sizes[id_], cameraMatrix=self._cfg.K_, distCoeffs=self._cfg.d_)
+            rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(corners[i], self._cfg['marker_sizes'][id_], cameraMatrix=self._cfg['K_'], distCoeffs=self._cfg['d_'])
             
             tvecs_flat_ = tvecs.ravel()
             msg_.pose.pose.position.x =  tvecs_flat_[2]

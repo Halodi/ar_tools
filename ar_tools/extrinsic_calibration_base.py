@@ -1,6 +1,6 @@
 import rclpy, tf2_ros
 from rclpy.qos import *
-from geometry_msgs.msg import Transform, TransformStamped
+from geometry_msgs.msg import TransformStamped
 from tf2_msgs.msg import TFMessage
 from halodi_msgs.msg import ARMarkers, ExtrinsicCalibrationInfo
 
@@ -8,7 +8,6 @@ from time import perf_counter
 from scipy.optimize import differential_evolution
 import numpy as np
 from ar_tools.transforms_math import *
-from ar_tools.throttle import Throttle
 
 class ExtrinsicCalibrationBase(rclpy.node.Node):
     def __init__(self, cfg, de_bounds):
@@ -35,16 +34,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         for marker in msg.markers:
             if marker.pose.header.frame_id == self._cfg['stationary_target_frame']:
                 ts_ = rclpy.time.Time(seconds=msg.header.stamp.sec, nanoseconds=msg.header.stamp.nanosec)
-                
-                tf_ = Transform()
-                tf_.translation.x = marker.pose.pose.position.x
-                tf_.translation.y = marker.pose.pose.position.y
-                tf_.translation.z = marker.pose.pose.position.z
-                tf_.rotation.x = marker.pose.pose.orientation.x
-                tf_.rotation.y = marker.pose.pose.orientation.y
-                tf_.rotation.z = marker.pose.pose.orientation.z
-                tf_.rotation.w = marker.pose.pose.orientation.w
-                tf_mat_ = transform_to_matrix(tf_)
+                tf_mat_ = pose_to_matrix(marker.pose.pose)
                 
                 if msg.header.frame_id == self._cfg['camera_frame']: self._ar_stamps_and_tfs.append([ ts_, tf_mat_ ])
                 else: self._ar_stamps_and_tfs.append([ ts_, tf_mat_, msg.header.frame_id ])
@@ -60,12 +50,10 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         tf_static_sub_ = self.create_subscription(TFMessage, "/tf_static", self.tf_static_cb,
             QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST))
 
-        throttle_ = Throttle(self._cfg['data_collection_frequency'])
         def spin_for(dt):
             end_time_ = perf_counter() + dt
             while perf_counter() < end_time_:
-                rclpy.spin_once(self)
-                throttle_.wait()            
+                rclpy.spin_once(self)    
         
         spin_for(self._cfg['tf_warmup_duration'])
         ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.markers_cb, 10)

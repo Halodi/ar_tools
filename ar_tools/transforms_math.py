@@ -14,6 +14,18 @@ def transform_to_matrix(tf):
     
     return out_
     
+def pose_to_matrix(pose):
+    out_ = np.empty([4,4])
+    out_[3,:] = [ 0, 0, 0, 1 ]
+    
+    out_[0,3] = pose.position.x
+    out_[1,3] = pose.position.y
+    out_[2,3] = pose.position.z
+    
+    out_[:3,:3] = Rotation.from_quat([ pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w ]).as_matrix()
+    
+    return out_
+    
 def matrix_to_transform(m):
     out_ = Transform()
     
