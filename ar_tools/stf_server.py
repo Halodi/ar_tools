@@ -30,7 +30,7 @@ class STF_Server(rclpy.node.Node):
             who = 'default_authority'   
                  
             for tf in msg.transforms:
-                ns_ = int(tf.header.stamp.sec * 1e9) + tf.header.stamp.nanosec
+                ns_ = (tf.header.stamp.sec * int(1e9)) + tf.header.stamp.nanosec
                 if ns_ > self._latest_clock[0]:
                     self._latest_clock[0] = ns_
                     self._latest_clock[1] = now_
@@ -43,7 +43,7 @@ class STF_Server(rclpy.node.Node):
                              
             for tf in msg.transforms:
                 if tf.header.stamp.sec != 0 or tf.header.stamp.nanosec != 0:
-                    ns_ = int(tf.header.stamp.sec * 1e9) + tf.header.stamp.nanosec
+                    ns_ = (tf.header.stamp.sec * int(1e9)) + tf.header.stamp.nanosec
                     self._static_sensor_delays[tf.child_frame_id] = ns_
                     
                 self._tf_buffer_core.set_transform_static(tf, who)

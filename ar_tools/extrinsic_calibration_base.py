@@ -19,7 +19,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self._optimization_result = None
         
         self._tf_buffer_core = None
-        self._ar_stamps_and_tfs = []
+        self._ar_marker_data = []
         self._tf_msgs = []
         self._tf_static_msgs = []
 
@@ -32,11 +32,11 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def markers_cb(self, msg):
         for marker in msg.markers:
             if marker.pose.header.frame_id == self._cfg['stationary_target_frame']:
-                ns_ = int((msg.header.stamp.sec * 1e9) + msg.header.stamp.nanosec)
+                ns_ = (msg.header.stamp.sec * int(1e9)) + msg.header.stamp.nanosec
                 tf_mat_ = pose_to_matrix(marker.pose.pose)
                 
-                if msg.header.frame_id == self._cfg['camera_frame']: self._ar_stamps_and_tfs.append([ ns_, tf_mat_ ])
-                else: self._ar_stamps_and_tfs.append([ ns_, tf_mat_, msg.header.frame_id ])
+                if msg.header.frame_id == self._cfg['camera_frame']: self._ar_marker_data.append([ ns_, tf_mat_ ])
+                else: self._ar_marker_data.append([ ns_, tf_mat_, msg.header.frame_id ])
                 
                 break
                 
@@ -61,17 +61,17 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         self.destroy_subscription(tf_sub_)
         self.destroy_subscription(tf_static_sub_)
         
-        skip_ = int(len(self._ar_stamps_and_tfs) / self._cfg['data_collection_samples_n'])
-        if skip_ > 1: self._ar_stamps_and_tfs = self._ar_stamps_and_tfs[::skip_]
+        skip_ = int(len(self._ar_marker_data) / self._cfg['data_collection_samples_n'])
+        if skip_ > 1: self._ar_marker_data = self._ar_marker_data[::skip_]
 
         if self._cfg['pickle_file'] != "":
-            pickle.dump([ self._ar_stamps_and_tfs, self._tf_msgs, self._tf_static_msgs ], open(self._cfg['pickle_file'], 'wb'))
+            pickle.dump([ self._ar_marker_data, self._tf_msgs, self._tf_static_msgs ], open(self._cfg['pickle_file'], 'wb'))
             self.get_logger().info("Saved data to " + self._cfg['pickle_file'])
             
-        self.get_logger().info("Data collection finished with " + str(len(self._ar_stamps_and_tfs)) + " marker samples")
+        self.get_logger().info("Data collection finished with " + str(len(self._ar_marker_data)) + " marker samples")
 
     def load_data(self):
-        [ self._ar_stamps_and_tfs, self._tf_msgs, self._tf_static_msgs ] = pickle.load(open(self._cfg['pickle_file'], 'rb'))
+        [ self._ar_marker_data, self._tf_msgs, self._tf_static_msgs ] = pickle.load(open(self._cfg['pickle_file'], 'rb'))
         
     def get_static_transform_matrix(self, x):
         return np.eye(4)
@@ -83,15 +83,15 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         camera_frame_adjustment_matrix_ = self.get_camera_frame_adjustment_matrix(x)        
         
         width_ = 6 if self._cfg['project_rotations'] else 3
-        m_ = np.empty([ len(self._ar_stamps_and_tfs), width_ ])
+        m_ = np.empty([ len(self._ar_marker_data), width_ ])
         I_ = []
         
-        for i in range(len(self._ar_stamps_and_tfs)):
+        for i in range(len(self._ar_marker_data)):
             try:
-                ts_ = rclpy.time.Time(nanoseconds=self._ar_stamps_and_tfs[i][0] - int(x[0] * 1e9))
+                ts_ = rclpy.time.Time(nanoseconds=self._ar_marker_data[i][0] - int(x[0] * 1e9))
                 wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
-                wt_mat_ = np.matmul(wc_mat_, self._ar_stamps_and_tfs[i][1])
+                wt_mat_ = np.matmul(wc_mat_, self._ar_marker_data[i][1])
                 
                 m_[i,:3] = wt_mat_[:3,3]
                 if self._cfg['project_rotations']: m_[i,3:] = np.sum(wt_mat_[:3,:3], axis=1)
@@ -112,11 +112,11 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         for tf_msg in self._tf_msgs: self._tf_buffer_core.set_transform(tf_msg, who_)
         for tf_msg in self._tf_static_msgs: self._tf_buffer_core.set_transform_static(tf_msg, who_)
 
-        for ar_stamp_and_tf in self._ar_stamps_and_tfs:
-            if len(ar_stamp_and_tf) == 3:
-                cw_tf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], rclpy.time.Time(nanoseconds=ar_stamp_and_tf[0]))
-                ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_tf_.transform), ar_stamp_and_tf[1])
-                ar_stamp_and_tf.pop()
+        for ar_data in self._ar_marker_data:
+            if len(ar_data) == 3:
+                cw_tf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_data[2], rclpy.time.Time(nanoseconds=ar_data[0]))
+                ar_data[1] = np.matmul(transform_to_matrix(cw_tf_.transform), ar_data[1])
+                ar_data.pop()
 
         self.get_logger().info("Optimizing ...")
         res_ = differential_evolution(self.stationary_target_error_fn, self._cfg['de_bounds_'],
