@@ -32,12 +32,12 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
     def markers_cb(self, msg):
         for marker in msg.markers:
             if marker.pose.header.frame_id == self._cfg['stationary_target_frame']:
-                ts_ = rclpy.time.Time(seconds=msg.header.stamp.sec, nanoseconds=msg.header.stamp.nanosec)
+                ns_ = int((msg.header.stamp.sec * 1e9) + msg.header.stamp.nanosec)
                 tf_mat_ = pose_to_matrix(marker.pose.pose)
                 
-                if msg.header.frame_id == self._cfg['camera_frame']: self._ar_stamps_and_tfs.append([ ts_, tf_mat_ ])
-                else: self._ar_stamps_and_tfs.append([ ts_, tf_mat_, msg.header.frame_id ])
-                    
+                if msg.header.frame_id == self._cfg['camera_frame']: self._ar_stamps_and_tfs.append([ ns_, tf_mat_ ])
+                else: self._ar_stamps_and_tfs.append([ ns_, tf_mat_, msg.header.frame_id ])
+                
                 break
                 
     def collect_data(self):
@@ -51,7 +51,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         def spin_for(dt):
             end_time_ = perf_counter() + dt
             while perf_counter() < end_time_:
-                rclpy.spin_once(self)    
+                rclpy.spin_once(self)
         
         spin_for(self._cfg['tf_bookend_duration'])
         ar_sub_ = self.create_subscription(ARMarkers, self._cfg['markers_topic'], self.markers_cb, 10)
@@ -88,7 +88,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         
         for i in range(len(self._ar_stamps_and_tfs)):
             try:
-                ts_ = rclpy.time.Time(nanoseconds=self._ar_stamps_and_tfs[i][0].nanoseconds - int(x[0] * 1e9))
+                ts_ = rclpy.time.Time(nanoseconds=self._ar_stamps_and_tfs[i][0] - int(x[0] * 1e9))
                 wc_stf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['static_frame'], self._cfg['camera_frame_parent'], ts_)
                 wc_mat_ = np.matmul(transform_to_matrix(wc_stf_.transform), camera_frame_adjustment_matrix_)
                 wt_mat_ = np.matmul(wc_mat_, self._ar_stamps_and_tfs[i][1])
@@ -114,7 +114,7 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
 
         for ar_stamp_and_tf in self._ar_stamps_and_tfs:
             if len(ar_stamp_and_tf) == 3:
-                cw_tf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], ar_stamp_and_tf[0])
+                cw_tf_ = self._tf_buffer_core.lookup_transform_core(self._cfg['camera_frame'], ar_stamp_and_tf[2], rclpy.time.Time(nanoseconds=ar_stamp_and_tf[0]))
                 ar_stamp_and_tf[1] = np.matmul(transform_to_matrix(cw_tf_.transform), ar_stamp_and_tf[1])
                 ar_stamp_and_tf.pop()
 
@@ -158,4 +158,12 @@ class ExtrinsicCalibrationBase(rclpy.node.Node):
         pub_ = self.create_publisher(ExtrinsicCalibrationInfo, self._cfg['outbound_calibration_topic'],
             QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST, reliability=ReliabilityPolicy.RELIABLE))
         pub_.publish(self.get_extrinsic_calibration_info_msg(self._optimization_result.x))
+        
+    def run(self, cmd_str):
+        if "collect" in cmd_str: self.collect_data()
+        elif "load"  in cmd_str: self.load_data()
+        else: return
+
+        if "optimize" in cmd_str: self.optimize()
+        if "publish"  in cmd_str: self.publish_extrinisic_calibration_info()
 

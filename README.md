@@ -47,8 +47,8 @@ Note that the first element of the parameter vector to be optimized is assumed t
 
 #### extrinsic\_calibration.json
 - common: contains parameters used by all extrinsic calibration nodes
-    - data\_collection\_duration: time for subscribing to both TFs and marker msgs
-    - data\_collection\_frequency: subscriber throttling rate
+    - tf\_bookend\_duration: additional subscription time to TF before and after subscribing to marker msgs
+    - data\_collection\_duration: time for subscribing to both TF and marker msgs
     - data\_collection\_samples\_n: reduce total marker samples to >= this value after collection
     - markers\_topic: topic for markers
     - stationary\_target\_frame: frame ID for a marker that is stationary relative to the robot
@@ -58,15 +58,22 @@ Note that the first element of the parameter vector to be optimized is assumed t
     - outbound\_calibration\_topic: for publishing calibration info if optimization is successful
     - camera\_name: camera name for publishing
     - de: some args for [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html)
+    - project_rotations: whether or not the projection of a unit vector from the target's estimated quaternion should be taken as an additional criterion
+    - verbose_optimization: prints standard deviation vector in each call to the error fn
+    - pickle\_file: file to write/load pickle data to. No writing is performed during data collection if empty
 - head: parameters for calibrating a camera mounted in/on the head
     - mean: [ camera\_delay, head\_pitch\_offset, head\_to\_camera\_xyz\_ypr ]
     - extents: range of mean. DE bounds are calculated by mean +/- extents
-    - camera\_delay: initial estimate of camera delay
 
 ### calibration\_extrinsic\_head
-ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE
+ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE CMD
 
-For calibrating a camera mounted in or on the head (only movement relative to the robot is through the neck joint).
+For calibrating a camera mounted in or on the head (only movement of the camera relative to the robot's kinematic root is through the neck joint).
+- CMD: a command sequence, eg "collect\_optimize\_publish". Either "collect" or "load" must be present
+    - collect: to collect new data
+    - load: to load from "pickle\_file" in extrinsic\_calibration.json
+    - optimize: run optimization
+    - publish: publish extrinsic calibration info after publish
 
 ### calibration\_motion\_head
 ros2 run ar\_tools calibration\_motion\_head

@@ -16,6 +16,6 @@ def generate_launch_description():
             name='calibration_extrinsic_head',
             output='screen',
             on_exit = launch.actions.Shutdown(),
-            arguments = [ '/home/halodi/eve_ws/src/ar_tools/config/extrinsic_calibration.json', 'collect_data', 'nothing' ]
+            arguments = [ '/home/halodi/eve_ws/src/ar_tools/config/extrinsic_calibration.json', 'collect' ]
         )
     ])

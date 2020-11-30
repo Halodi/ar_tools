@@ -45,12 +45,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-
-    if sys.argv[2] == "collect_data": head_calibrator_.collect_data()
-    elif sys.argv[2] == "load_data":  head_calibrator_.load_data()
-
-    if "optimize" in sys.argv[3]: head_calibrator_.optimize()
-    if "publish" in sys.argv[3]:  head_calibrator_.publish_extrinisic_calibration_info()
+    head_calibrator_.run(sys.argv[2], sys.argv[3])
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()
