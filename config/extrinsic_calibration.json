@@ -1,7 +1,7 @@
 {
     "common":
     {
-        "tf_warmup_duration": 5,
+        "tf_bookend_duration": 5,
         "data_collection_duration": 15,
         "data_collection_samples_n": 200,
         "markers_topic": "/aruco/kinect0_color",
@@ -17,21 +17,24 @@
         "de":
         {
             "strategy": "best1bin",
-            "maxiter": 1000,
-            "popsize": 20,
-            "tol": 0.01,
+            "maxiter": 200,
+            "popsize": 10,
+            "atol": 0.0,
+            "tol": 0.1,
             "mutation": 0.5,
             "recombination": 0.7,
             "polish": true,
             "workers": 1
-        }
+        },
+        "project_rotations": false,
+        "verbose_optimization": true,
+
+        "pickle_file": "/tmp/extrinsic_calibration_data.pkl"
     },
     
     "head":
     {
-        "mean"   : [ -0.1 ],
-        "mean_": [0.0, 0.1 , -0.03, 0.2 , 0.0, 0.2, 0.0 ],
-        "extents": [ 0.1 ], 
-        "extents_": [0.1, 0.05, 0.05 , 0.05, 0.2, 0.2, 0.2 ]
+        "mean"   : [ 0.5, 0.0 , 0.1 , -0.03, 0.2 , 0.0 , 0.2 , 0.0 ],
+        "extents": [ 0.6, 0.05, 0.02, 0.02 , 0.02, 0.05, 0.05, 0.05 ]
     }
 }
