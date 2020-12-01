@@ -29,7 +29,7 @@
         "project_rotations": false,
         "verbose_optimization": true,
 
-        "pickle_file": "/tmp/extrinsic_calibration_data.pkl"
+        "data_save_folder": "/tmp/"
     },
     
     "head":

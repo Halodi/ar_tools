@@ -60,7 +60,7 @@ Note that the first element of the parameter vector to be optimized is assumed t
     - de: some args for [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html)
     - project_rotations: whether or not the projection of a unit vector from the target's estimated quaternion should be taken as an additional criterion
     - verbose_optimization: prints standard deviation vector in each call to the error fn
-    - pickle\_file: file to write/load pickle data to. No writing is performed during data collection if empty
+    - data\_save\_folder: folder to write collected data to. No writing is performed if this string is empty
 - head: parameters for calibrating a camera mounted in/on the head
     - mean: [ camera\_delay, head\_pitch\_offset, head\_to\_camera\_xyz\_ypr ]
     - extents: range of mean. DE bounds are calculated by mean +/- extents
@@ -71,7 +71,7 @@ ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE CM
 For calibrating a camera mounted in or on the head (only movement of the camera relative to the robot's kinematic root is through the neck joint).
 - CMD: a command sequence, eg "collect\_optimize\_publish". Either "collect" or "load" must be present
     - collect: to collect new data
-    - load: to load from "pickle\_file" in extrinsic\_calibration.json
+    - load: to load from "data\_save\_folder" in extrinsic\_calibration.json
     - optimize: run optimization
     - publish: publish extrinsic calibration info after publish
 
