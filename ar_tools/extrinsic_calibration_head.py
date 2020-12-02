@@ -45,7 +45,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     head_calibrator_ = ExtrinsicCalibrationHead(sys.argv[1])
-    head_calibrator_.run(sys.argv[2], sys.argv[3])
+    head_calibrator_.run(sys.argv[2])
     
     head_calibrator_.destroy_node()
     rclpy.shutdown()

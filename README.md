@@ -49,9 +49,9 @@ Note that the first element of the parameter vector to be optimized is assumed t
 - common: contains parameters used by all extrinsic calibration nodes
     - tf\_bookend\_duration: additional subscription time to TF before and after subscribing to marker msgs
     - data\_collection\_duration: time for subscribing to both TF and marker msgs
-    - data\_collection\_samples\_n: reduce total marker samples to >= this value after collection
+    - data\_collection\_samples\_n: reduce marker samples to >= this value after collection
     - markers\_topic: topic for markers
-    - stationary\_target\_frame: frame ID for a marker that is stationary relative to the robot
+    - stationary\_target\_frames: frame IDs for markers fixed in the world
     - static\_frame: a fixed TF frame ID relative to the robot, nominally the root of the TF tree
     - camera\_frame\_parent: the immediate parent frame ID of the camera
     - camera\_frame: frame ID of the camera
@@ -59,6 +59,7 @@ Note that the first element of the parameter vector to be optimized is assumed t
     - camera\_name: camera name for publishing
     - de: some args for [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html)
     - project_rotations: whether or not the projection of a unit vector from the target's estimated quaternion should be taken as an additional criterion
+    - marker\_opt\_count\_threshold: minimum marker count per iteration to be considered in error computation
     - verbose_optimization: prints standard deviation vector in each call to the error fn
     - data\_save\_folder: folder to write collected data to. No writing is performed if this string is empty
 - head: parameters for calibrating a camera mounted in/on the head

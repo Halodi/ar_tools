@@ -1,5 +1,6 @@
 from threading import Lock
 from time import perf_counter
+from ar_tools.transforms_math import timestamp_nanoseconds
 
 import rclpy, tf2_ros
 from rclpy.qos import *
@@ -55,7 +56,7 @@ class STF_Server(rclpy.node.Node):
                 static_sensor_delay_ = self._static_sensor_delays.get(request.child_frame)
                 if static_sensor_delay_ is not None: age_ns_ += static_sensor_delay_
 
-                ts_ = rclpy.time.Time(nanoseconds=self._latest_clock[0] - age_ns_)
+                ts_ = timestamp_nanoseconds(self._latest_clock[0] - age_ns_)
                 response.stf = self._tf_buffer_core.lookup_transform_core(request.parent_frame, request.child_frame, ts_)
                 response.ok = True
             except Exception as e:

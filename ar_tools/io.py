@@ -2,38 +2,17 @@ import numpy as np
 import pickle
 import os
 from geometry_msgs.msg import TransformStamped
+from ar_tools.ArMarkerDataContainer import ArMarkerDataContainer
 
-def save_matrix_with_metadata(partial_path, M, meta):
+def save_matrix_with_metadata(partial_path, M, meta, protocol=pickle.HIGHEST_PROTOCOL):
     np.save(partial_path+"_m.npz", M)
-    pickle.dump(meta, open(partial_path+"_meta.pkl", 'wb'), pickle.HIGHEST_PROTOCOL)
+    pickle.dump(meta, open(partial_path+"_meta.pkl", 'wb'), protocol)
     
 def load_matrix_with_metadata(partial_path):
     M_ = np.load(partial_path+"_m.npz")
     meta_ = pickle.load(open(partial_path+"_meta.pkl", 'rb'))
     
     return M_, meta_
-
-def save_ar_marker_data(partial_path, ar_marker_data):
-    num_entries_ = len(ar_marker_data)
-    M_ = np.empty([num_entries_,4,4])
-    meta_ = []
-    
-    for i in range(num_entries_):
-        M_[i] = ar_marker_data[i][0]
-        meta_.append(ar_marker_data[i][1:])
-        
-    save_matrix_with_metadata(partial_path, M_, meta_)
-    
-def load_ar_marker_data(partial_path):
-    M_, meta_ = load_matrix_with_metadata(partial_path)
-    
-    out_ = []
-    for i in range(len(meta_)):
-        v_ = [ M_[i] ]
-        v_.extend(meta_[i])
-        out_.append(v_)
-        
-    return out_
     
 def save_transformstamped_array(partial_path, stfs):
     num_entries_ = len(stfs)
@@ -78,12 +57,12 @@ def load_transformstamped_array(partial_path):
     return out_
 
 def save_calib_data(path, ar_marker_data, tf_msgs, tf_static_msgs):
-    save_ar_marker_data(os.path.join(path, "ar_marker_data"), ar_marker_data)    
+    ar_marker_data.save(os.path.join(path, "ar_marker_data.pkl"))
     save_transformstamped_array(os.path.join(path, "tf"), tf_msgs)
     save_transformstamped_array(os.path.join(path, "tf_static"), tf_static_msgs)
     
 def load_calib_data(path):
-    ar_marker_data_ = load_ar_marker_data(os.path.join(path, "ar_marker_data"))
+    ar_marker_data_ = ArMarkerDataContainer(os.path.join(path, "ar_marker_data.pkl"))
     tf_msgs_ = load_transformstamped_array(os.path.join(path, "tf"))
     tf_static_msgs_ = load_transformstamped_array(os.path.join(path, "tf_static"))
     

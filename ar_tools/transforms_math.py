@@ -1,6 +1,9 @@
 from geometry_msgs.msg import Transform
 import numpy as np
 from scipy.spatial.transform import Rotation
+from collections import namedtuple
+
+timestamp_nanoseconds = namedtuple('TimestampNs', [ 'nanoseconds' ])
 
 def transform_to_matrix(tf):
     out_ = np.empty([4,4])

@@ -5,7 +5,7 @@
         "data_collection_duration": 15,
         "data_collection_samples_n": 200,
         "markers_topic": "/aruco/kinect0_color",
-        "stationary_target_frame": "0",
+        "stationary_target_frames": [ "0" ],
         
         "static_frame": "World",
         "camera_frame_parent": "head",
@@ -27,7 +27,7 @@
             "workers": 1
         },
         "project_rotations": false,
-        "verbose_optimization": true,
+        "marker_opt_count_threshold": 20,
 
         "data_save_folder": "/tmp/"
     },
