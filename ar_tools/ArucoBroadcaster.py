@@ -26,6 +26,7 @@ class ArucoBroadcaster:
               
         self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
         self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg['camera_frame'], 10)
+        self._publisher_tf = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg['parent_frame'], 10) if self._cfg['parent_frame'] != self._cfg['camera_frame'] else None
         
     def run(self):
         while rclpy.ok():
@@ -55,9 +56,10 @@ class ArucoBroadcaster:
         if self._cfg['image_scaling'] != 1.0:
             image_grayscale = cv2.resize(image_grayscale, (0,0), fx=self._cfg['image_scaling'], fy=self._cfg['image_scaling'])
             
-        markers_msg_ = ARMarkers(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg['parent_frame']), markers=self.get_aruco_markers(image_grayscale))
+        markers_msg_ = ARMarkers(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg['camera_frame']), markers=self.get_aruco_markers(image_grayscale))
+        self._publisher.publish(markers_msg_)
+
         tfs_ = []
-            
         for marker in markers_msg_.markers:
             tf_ = TransformStamped(header=Header(stamp=world_to_camera_stf.header.stamp, frame_id=self._cfg['camera_frame']), child_frame_id=marker.pose.header.frame_id)
             tf_.transform.translation.x = marker.pose.pose.position.x
@@ -68,18 +70,20 @@ class ArucoBroadcaster:
             tf_.transform.rotation.z = marker.pose.pose.orientation.z
             tf_.transform.rotation.w = marker.pose.pose.orientation.w
             tfs_.append(tf_)
-            
-            ttf_ = multiply_transforms(world_to_camera_stf.transform, tf_.transform)
-            marker.pose.pose.position.x = ttf_.translation.x
-            marker.pose.pose.position.y = ttf_.translation.y
-            marker.pose.pose.position.z = ttf_.translation.z
-            marker.pose.pose.orientation.x = ttf_.rotation.x
-            marker.pose.pose.orientation.y = ttf_.rotation.y
-            marker.pose.pose.orientation.z = ttf_.rotation.z
-            marker.pose.pose.orientation.w = ttf_.rotation.w
+        if len(tfs_) != 0: self._broadcaster.sendTransform(tfs_)
         
-        if self._cfg['broadcast_transforms'] and len(tfs_) is not 0: self._broadcaster.sendTransform(tfs_)
-        self._publisher.publish(markers_msg_)
+        if self._publisher_tf is not None:
+            for i in range(len(tfs_)):
+                ttf_ = multiply_transforms(world_to_camera_stf.transform, tfs_[i].transform)
+                markers_msg_.markers[i].pose.pose.position.x = ttf_.translation.x
+                markers_msg_.markers[i].pose.pose.position.y = ttf_.translation.y
+                markers_msg_.markers[i].pose.pose.position.z = ttf_.translation.z
+                markers_msg_.markers[i].pose.pose.orientation.x = ttf_.rotation.x
+                markers_msg_.markers[i].pose.pose.orientation.y = ttf_.rotation.y
+                markers_msg_.markers[i].pose.pose.orientation.z = ttf_.rotation.z
+                markers_msg_.markers[i].pose.pose.orientation.w = ttf_.rotation.w
+            markers_msg_.header.frame_id = self._cfg['parent_frame']
+            self._publisher_tf.publish(markers_msg_)
                 
     def get_aruco_markers(self, image_grayscale):
         corners, ids, _rejectedImgPoints = cv2.aruco.detectMarkers(image_grayscale, self._cfg['aruco_dict_'], parameters=self._cfg['aruco_params_'])

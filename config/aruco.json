@@ -1,8 +1,7 @@
 {
     "parent_frame": "World",
-    "camera_frame": "kinect0_color",
+    "camera_frame": "zedMini0_left",
     "apply_timestamp_age": false,
-    "broadcast_transforms": false, 
     "image_scaling": 1.0,
     "aruco_dict": "4X4_50",    
     

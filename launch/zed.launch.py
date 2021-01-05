@@ -8,7 +8,7 @@ def generate_launch_description():
             node_executable='aruco_zed',
             name='aruco_zed',
             output='screen',
-            arguments = [ '10.4.2.30:30000' ]
+            arguments = [ '/home/james/eloquent_ws/src/ar_tools/config/aruco.json', '10.4.1.30:30000' ]
         ),
         
         Node(
