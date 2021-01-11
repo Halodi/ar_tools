@@ -1,6 +1,6 @@
 {
-    "parent_frame": "World",
-    "camera_frame": "zedMini0_left",
+    "parent_frame": "zedMini0_right",
+    "camera_frame": "zedMini0_right",
     "apply_timestamp_age": true,
     "image_scaling": 1.0,
     "aruco_dict": "4X4_50",    

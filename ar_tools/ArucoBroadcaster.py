@@ -2,6 +2,7 @@ import json, cv2
 import numpy as np
 from scipy.spatial.transform import Rotation
 from os.path import isfile
+from os import getpid
 from ar_tools.transforms_math import multiply_transforms
 
 import rclpy, tf2_ros
@@ -19,7 +20,7 @@ class ArucoBroadcaster:
         self._marker_rot_adj = Rotation.from_rotvec([ 0, np.pi, 0 ])
     
         rclpy.init(args=rclpy_args)
-        self._node = rclpy.create_node("aruco_publisher")
+        self._node = rclpy.create_node("aruco_publisher_" + str(getpid()))
         
         self._stf_client = self._node.create_client(GetStampedTF, 'get_stamped_tf')
         self._stf_req = GetStampedTF.Request(parent_frame=self._cfg['parent_frame'], child_frame=self._cfg['camera_frame'])

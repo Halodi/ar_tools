@@ -4,6 +4,9 @@ from ar_tools.transforms_math import timestamp_nanoseconds
 
 import rclpy, tf2_ros
 from rclpy.qos import *
+from geometry_msgs.msg import TransformStamped
+from std_msgs.msg import Header
+from builtin_interfaces.msg import Time
 from tf2_msgs.msg import TFMessage
 from halodi_msgs.srv import GetStampedTF
 
@@ -24,7 +27,7 @@ class STF_Server(rclpy.node.Node):
             QoSProfile(depth=10, durability=DurabilityPolicy.TRANSIENT_LOCAL, history=HistoryPolicy.KEEP_LAST))
             
         self._srv = self.create_service(GetStampedTF, 'get_stamped_tf', self.get_stf_srv)
-            
+
     def tf_cb(self, msg):
         now_ = perf_counter()
         with self._lock:
@@ -57,7 +60,13 @@ class STF_Server(rclpy.node.Node):
                 if static_sensor_delay_ is not None: age_ns_ += static_sensor_delay_
 
                 ts_ = timestamp_nanoseconds(self._latest_clock[0] - age_ns_)
-                response.stf = self._tf_buffer_core.lookup_transform_core(request.parent_frame, request.child_frame, ts_)
+                if request.parent_frame != request.child_frame:
+                    response.stf = self._tf_buffer_core.lookup_transform_core(request.parent_frame, request.child_frame, ts_)
+                else:
+                    sec_ = int(ts_.nanoseconds / 1e9)
+                    nsec_ = ts_.nanoseconds - int(sec_*1e9)
+                    stamp_ = Time(sec=sec_, nanosec=nsec_)
+                    response.stf = TransformStamped(header=Header(frame_id=request.parent_frame, stamp=stamp_), child_frame_id=request.child_frame)
                 response.ok = True
             except Exception as e:
                 self.get_logger().error(str(e))    

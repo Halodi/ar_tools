@@ -7,7 +7,7 @@ from rclpy.node import Node
 from unique_identifier_msgs.msg import UUID
 from builtin_interfaces.msg import Duration
 from action_msgs.msg import GoalStatus
-from halodi_msgs.msg import ReferenceFrameName, TrajectoryInterpolation, WholeBodyTrajectory, WholeBodyTrajectoryPoint, TaskSpaceCommand, JointSpaceCommand, JointName
+from halodi_msgs.msg import ReferenceFrameName, TrajectoryInterpolation, WholeBodyTrajectory, WholeBodyTrajectoryPoint, TaskSpaceCommand, JointSpaceCommand, JointName, BalanceMode
 
 
 
@@ -160,6 +160,7 @@ def run_routine(rclpy_init_args, trajectory_points):
     
     periodic_trajectory_msg_ = WholeBodyTrajectory(append_trajectory=False) # create a whole body trajectory msg that will override any trajectory currently being executed
     periodic_trajectory_msg_.interpolation_mode.value = TrajectoryInterpolation.MINIMUM_JERK_CONSTRAINED # choose an interpolation mode
+    periodic_trajectory_msg_.balance_mode = [ BalanceMode(mode=BalanceMode.FORCE_STATIONARY) ]
     periodic_trajectory_msg_.trajectory_points = trajectory_points
     
     wbtp_ = WholeBodyTrajectoryPublisher(None, periodic_trajectory_msg_) # create the helper class
@@ -181,18 +182,18 @@ def head(rclpy_init_args=None):
 
     cumulative_seconds_from_start_ = 0
 
-    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 1
+    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 2
     periodic_trajectory_pt_msg_1_ = WholeBodyTrajectoryPoint(time_from_start=Duration(sec=cumulative_seconds_from_start_))
     periodic_trajectory_pt_msg_1_.joint_space_commands.append(generate_joint_space_command_msg(JointName.NECK_PITCH, 0.5))
     periodic_trajectory_pt_msg_1_.task_space_commands.append(generate_task_space_command_msg(ReferenceFrameName.PELVIS, ReferenceFrameName.BASE, [ 0.0, 0.0, 0.9, 0.0, 0.0, np.deg2rad(20.0) ]))
 
-    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 2
+    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 3
     periodic_trajectory_pt_msg_2_ = WholeBodyTrajectoryPoint(time_from_start=Duration(sec=cumulative_seconds_from_start_))
     periodic_trajectory_pt_msg_2_.joint_space_commands.append(generate_joint_space_command_msg(JointName.NECK_PITCH, 0.0))
     periodic_trajectory_pt_msg_2_.task_space_commands.append(generate_task_space_command_msg(ReferenceFrameName.PELVIS, ReferenceFrameName.BASE, [ 0.0, 0.0, 0.7, 0.0, 0.0, np.deg2rad(-20.0) ]))
     
     # an extra message to make sure the trajectory ends in a safe position
-    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 2
+    cumulative_seconds_from_start_ = cumulative_seconds_from_start_ + 3
     periodic_trajectory_pt_msg_3_ = generate_datum_pose_trajectory_point_msg(cumulative_seconds_from_start_)
     
     run_routine(rclpy_init_args, [ periodic_trajectory_pt_msg_1_, periodic_trajectory_pt_msg_2_, periodic_trajectory_pt_msg_3_ ])

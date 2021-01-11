@@ -23,12 +23,14 @@ def zed(rclpy_args=None):
 
     zed = sl.Camera()
     if zed.open(init_params) != sl.ERROR_CODE.SUCCESS: exit(1)
+
+    camera_side = sl.VIEW.RIGHT if sys.argv[3] == 'right' else sl.VIEW.LEFT
     
     runtime_parameters = sl.RuntimeParameters()
     image = sl.Mat()
     def get_grayscale_img():
         if zed.grab(runtime_parameters) == sl.ERROR_CODE.SUCCESS:            
-            zed.retrieve_image(image, sl.VIEW.LEFT)
+            zed.retrieve_image(image, camera_side)
             img_grayscale_ = cv2.cvtColor(image.get_data()[:,:,:3], cv2.COLOR_BGR2GRAY)
             age_ns_ = zed.get_timestamp(sl.TIME_REFERENCE.CURRENT).get_nanoseconds() - zed.get_timestamp(sl.TIME_REFERENCE.IMAGE).get_nanoseconds()
             return img_grayscale_, perf_counter() - (age_ns_ / 1e9)
