@@ -15,6 +15,7 @@ Running aruco\_ nodes requires a config file; refer to config/aruco.json for an 
 - parent\_frame: frame to transform markers into
 - camera\_frame: frame that markers are detected in
 - broadcast\_transforms: if true, publishes camera -> marker TF msgs
+- apply\_timestamp\_age: if true, subtracts an estimated image age before calling stf\_server for a ROS time
 - image\_scaling: fx, fy of [cv.resize](https://docs.opencv.org/master/da/d54/group__imgproc__transform.html#ga47a974309e9102f5f08231edc7e7529d)
 - aruco\_dict: identifying string that follows OpenCV's pre-defined [dictionaries](https://docs.opencv.org/master/dc/df7/dictionary_8hpp.html), omitting DICT\_
 - marker\_sizes: dictionary of numerical marker IDs to side lengths, used for pose estimation. Markers not defined here are discarded
@@ -42,39 +43,6 @@ ros2 run ar\_tools aruco\_grpc PATH\_TO\_ARUCO\_CONFIG\_FILE GRPC\_IMAGE\_SERVER
 - GRPC\_COMMON\_SERVER: address of a GRPC common server
 
 ## Extrinsic calibration nodes
-Running calibration\_extrinsic\_ nodes requires a config file; refer to config/extrinsic\_calibration.json for an example. Requires a marker fixed in space e.g. on a wall, visible to the robot across a reasonable range of motion with a streaming node already running, e.g. aruco\_zed. Robot is assumed to be moving while data is being collected, e.g. through a calibration\_motion\_ node.
-Note that the first element of the parameter vector to be optimized is assumed to be a camera delay (>=0).
-
-#### extrinsic\_calibration.json
-- common: contains parameters used by all extrinsic calibration nodes
-    - tf\_bookend\_duration: additional subscription time to TF before and after subscribing to marker msgs
-    - data\_collection\_duration: time for subscribing to both TF and marker msgs
-    - data\_collection\_samples\_n: reduce marker samples to >= this value after collection
-    - markers\_topic: topic for markers
-    - stationary\_target\_frames: frame IDs for markers fixed in the world
-    - static\_frame: a fixed TF frame ID relative to the robot, nominally the root of the TF tree
-    - camera\_frame\_parent: the immediate parent frame ID of the camera
-    - camera\_frame: frame ID of the camera
-    - outbound\_calibration\_topic: for publishing calibration info if optimization is successful
-    - camera\_name: camera name for publishing
-    - de: some args for [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html)
-    - project_rotations: whether or not the projection of a unit vector from the target's estimated quaternion should be taken as an additional criterion
-    - marker\_opt\_count\_threshold: minimum marker count per iteration to be considered in error computation
-    - verbose_optimization: prints standard deviation vector in each call to the error fn
-    - data\_save\_folder: folder to write collected data to. No writing is performed if this string is empty
-- head: parameters for calibrating a camera mounted in/on the head
-    - mean: [ camera\_delay, head\_pitch\_offset, head\_to\_camera\_xyz\_ypr ]
-    - extents: range of mean. DE bounds are calculated by mean +/- extents
-
-### calibration\_extrinsic\_head
-ros2 run ar\_tools calibration\_extrinsic\_head PATH\_TO\_CALIB\_CONFIG\_FILE CMD
-
-For calibrating a camera mounted in or on the head (only movement of the camera relative to the robot's kinematic root is through the neck joint).
-- CMD: a command sequence, eg "collect\_optimize\_publish". Either "collect" or "load" must be present
-    - collect: to collect new data
-    - load: to load from "data\_save\_folder" in extrinsic\_calibration.json
-    - optimize: run optimization
-    - publish: publish extrinsic calibration info after publish
 
 ### calibration\_motion\_head
 ros2 run ar\_tools calibration\_motion\_head
@@ -86,4 +54,3 @@ Please adjust arguments in relevant launch/config files, then cd to the workspac
 
 - ros2 launch ar\_tools grpc.launch.py: aruco\_grpc + stf\_server
 - ros2 launch ar\_tools zed.launch.py: aruco\_zed + stf\_server
-- ros2 launch ar\_tools extrinsic\_calibration\_head.launch.py: calibration\_motion\_head + calibration\_extrinsic\_head (required)

@@ -25,7 +25,7 @@ class ArucoBroadcaster:
         self._stf_client = self._node.create_client(GetStampedTF, 'get_stamped_tf')
         self._stf_req = GetStampedTF.Request(parent_frame=self._cfg['parent_frame'], child_frame=self._cfg['camera_frame'])
               
-        self._broadcaster = tf2_ros.TransformBroadcaster(self._node)
+        self._broadcaster = tf2_ros.TransformBroadcaster(self._node) if self._cfg['broadcast_transforms'] else None
         self._publisher = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg['camera_frame'], 10)
         self._publisher_tf = self._node.create_publisher(ARMarkers, "aruco/"+self._cfg['parent_frame'], 10) if self._cfg['parent_frame'] != self._cfg['camera_frame'] else None
         
@@ -71,7 +71,7 @@ class ArucoBroadcaster:
             tf_.transform.rotation.z = marker.pose.pose.orientation.z
             tf_.transform.rotation.w = marker.pose.pose.orientation.w
             tfs_.append(tf_)
-        if len(tfs_) != 0: self._broadcaster.sendTransform(tfs_)
+        if len(tfs_) != 0 and self._broadcaster is not None: self._broadcaster.sendTransform(tfs_)
         
         if self._publisher_tf is not None:
             for i in range(len(tfs_)):
